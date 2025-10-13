@@ -61,7 +61,7 @@ active_requests: Dict[str, Dict] = {}
 async def startup(ctx: Context):
     """Startup event handler"""
     logger.info("=" * 60)
-    logger.success("🚀 ORCHESTRATOR AGENT STARTED")
+    logger.success(" ORCHESTRATOR AGENT STARTED")
     logger.info("=" * 60)
     logger.info(f"Name: {ctx.name}")
     logger.info(f"Address: {ctx.agent.address}")

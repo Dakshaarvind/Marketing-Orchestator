@@ -1,6 +1,6 @@
 
 """
-Simple client that actually works for sending campaign requests
+client for sending campaign requests
 """
 from uagents import Agent, Context, Model
 from pydantic import Field
@@ -27,9 +27,9 @@ class CampaignResponse(Model):
 
 # Get orchestrator address from command line
 if len(sys.argv) < 2:
-    print("Usage: python simple_client.py <orchestrator_address>")
+    print("Usage: python client.py <orchestrator_address>")
     print("\nExample:")
-    print("  python simple_client.py agent1qds7nkx95cnjg9v8v9sh8f28hjctv5pn4h9wjpc9acruvfq6zpmu5tj35kz")
+    print("  python client.py agent1qds7nkx95cnjg9v8v9sh8f28hjctv5pn4h9wjpc9acruvfq6zpmu5tj35kz")
     sys.exit(1)
 
 ORCHESTRATOR_ADDRESS = sys.argv[1]
@@ -118,7 +118,7 @@ async def check_status(ctx: Context):
 
 if __name__ == "__main__":
     print("\n" + "="*60)
-    print("SIMPLE CLIENT - Campaign Request Test")
+    print("CLIENT - Campaign Request Test")
     print("="*60)
     print("\nThis will:")
     print("  1. Send a donut shop campaign request")
