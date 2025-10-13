@@ -80,7 +80,7 @@ async def handle_campaign_request(ctx: Context, sender: str, msg: CampaignReques
     request_id = f"{msg.user_id}_{int(datetime.utcnow().timestamp())}"
     
     logger.info("\n" + "=" * 60)
-    logger.info("📨 NEW CAMPAIGN REQUEST RECEIVED")
+    logger.info(" NEW CAMPAIGN REQUEST RECEIVED")
     logger.info("=" * 60)
     logger.info(f"Request ID: {request_id}")
     logger.info(f"From: {sender}")
@@ -98,7 +98,7 @@ async def handle_campaign_request(ctx: Context, sender: str, msg: CampaignReques
     
     try:
         # === STAGE 1: Run Analysis Agent ===
-        logger.info(f"\n[{request_id}] 🔍 Running Analysis Agent...")
+        logger.info(f"\n[{request_id}]  Running Analysis Agent...")
         
         # Import and run analysis agent
         try:
@@ -144,9 +144,9 @@ async def handle_campaign_request(ctx: Context, sender: str, msg: CampaignReques
             raise
         
         # === Future stages (placeholders) ===
-        logger.info(f"\n[{request_id}] ⏳ Competitor Research - Coming soon")
-        logger.info(f"[{request_id}] ⏳ Content Generation - Coming soon")
-        logger.info(f"[{request_id}] ⏳ Scheduling - Coming soon")
+        logger.info(f"\n[{request_id}] Competitor Research - Coming soon")
+        logger.info(f"[{request_id}]  Content Generation - Coming soon")
+        logger.info(f"[{request_id}]  Scheduling - Coming soon")
         
         # === Prepare Response ===
         response = CampaignResponse(
