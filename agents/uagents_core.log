@@ -1,0 +1,8 @@
+2025-10-14 08:59:13,253 uagents_core.utils.registration INFO Registering with Almanac API
+2025-10-14 08:59:16,001 uagents_core.utils.registration ERROR Could not validate credentials
+Traceback (most recent call last):
+  File "C:\Users\daksh\OneDrive\Documents\GitHub\Marketing-Orchestator\venv\Lib\site-packages\uagents_core\utils\registration.py", line 143, in _send_http_request_agentverse
+    response.raise_for_status()
+  File "C:\Users\daksh\OneDrive\Documents\GitHub\Marketing-Orchestator\venv\Lib\site-packages\requests\models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 401 Client Error: Unauthorized for url: https://agentverse.ai/v1/agents

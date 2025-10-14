@@ -5,7 +5,7 @@ Uses Fetch.ai SDK pattern with webhooks for Agentverse integration
 """
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from uagents_core.crypto import Identity
+from uagents.crypto import Identity
 from fetchai import fetch
 from fetchai.registration import register_with_agentverse
 from fetchai.communication import parse_message_from_agent, send_message_to_agent
