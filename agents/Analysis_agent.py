@@ -163,7 +163,7 @@ def run_analysis_agent(business_type: str, location: Optional[str] = None,
         os.environ["OPENAI_API_KEY"] = api_key
     
     llm = ChatOpenAI(
-        model="gpt-4-turbo-preview",
+        model="gpt-4o-mini",  # Using gpt-4o-mini 
         temperature=0.7
     )
     
