@@ -8,3 +8,7 @@ Traceback (most recent call last):
 requests.exceptions.HTTPError: 401 Client Error: Unauthorized for url: https://agentverse.ai/v1/agents
 2025-10-14 09:13:22,283 uagents_core.utils.registration INFO Registering with Almanac API
 2025-10-14 09:49:59,881 uagents_core.utils.registration INFO Registering with Almanac API
+2025-10-14 16:04:00,561 uagents_core.utils.registration INFO Registering with Almanac API
+2025-10-14 16:21:27,780 uagents_core.utils.registration INFO Registering with Almanac API
+2025-10-14 16:34:39,426 uagents_core.utils.registration INFO Registering with Almanac API
+2025-10-14 16:40:13,885 uagents_core.utils.registration INFO Registering with Almanac API

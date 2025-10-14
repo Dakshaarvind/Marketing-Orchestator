@@ -126,7 +126,7 @@ def webhook():
         # Parse incoming message
         data = request.get_data().decode("utf-8")
         logger.info("=" * 60)
-        logger.info(" NEW CAMPAIGN REQUEST RECEIVED")
+        logger.info("📨 NEW CAMPAIGN REQUEST RECEIVED")
         logger.info("=" * 60)
         
         message = parse_message_from_agent(data)
@@ -195,9 +195,9 @@ def webhook():
             }
         
         # === STAGE 2-4: Future agents (placeholders) ===
-        logger.info(f"[{request_id}]  Competitor Research - Coming soon")
-        logger.info(f"[{request_id}]  Content Generation - Coming soon")
-        logger.info(f"[{request_id}]  Scheduling - Coming soon")
+        logger.info(f"[{request_id}] ⏳ Competitor Research - Coming soon")
+        logger.info(f"[{request_id}] ⏳ Content Generation - Coming soon")
+        logger.info(f"[{request_id}] ⏳ Scheduling - Coming soon")
         
         # Prepare response
         response_payload = {
@@ -224,7 +224,7 @@ def webhook():
         active_requests[request_id]["response"] = response_payload
         
         # Send response back to sender
-        logger.info(f"\n[{request_id}]  Sending response back to {sender_address}")
+        logger.info(f"\n[{request_id}] 📤 Sending response back to {sender_address}")
         send_message_to_agent(
             orchestrator_identity,
             sender_address,
@@ -241,6 +241,100 @@ def webhook():
         logger.error(f"Error in webhook: {e}")
         import traceback
         traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/test', methods=['POST'])
+def test_endpoint():
+    """
+    Simple test endpoint for local testing WITHOUT agent authentication
+    Use this for debugging - accepts plain JSON
+    """
+    try:
+        logger.info("=" * 60)
+        logger.info("📨 TEST REQUEST RECEIVED (No auth)")
+        logger.info("=" * 60)
+        
+        # Get JSON directly
+        payload = request.get_json()
+        
+        if not payload:
+            return jsonify({"error": "No JSON payload"}), 400
+        
+        logger.info(f"Payload: {json.dumps(payload, indent=2)}")
+        
+        # Extract campaign parameters
+        business_type = payload.get('business_type')
+        location = payload.get('location')
+        campaign_goals = payload.get('campaign_goals')
+        user_id = payload.get('user_id', 'test_user')
+        
+        # Validate
+        if not business_type or not campaign_goals:
+            return jsonify({
+                "status": "error",
+                "message": "Missing business_type or campaign_goals"
+            }), 400
+        
+        # Generate request ID
+        request_id = f"{user_id}_{int(datetime.utcnow().timestamp())}"
+        
+        # Run Analysis
+        logger.info(f"[{request_id}] 🔍 Running Analysis Agent...")
+        
+        try:
+            # Try importing from same directory
+            import sys
+            from pathlib import Path
+            
+            # Ensure agents directory is in path
+            agents_dir = Path(__file__).parent
+            if str(agents_dir) not in sys.path:
+                sys.path.insert(0, str(agents_dir))
+            
+            from analysis_agent import run_analysis_agent
+            
+            analysis_result = run_analysis_agent(
+                business_type=business_type,
+                location=location,
+                campaign_goals=campaign_goals
+            )
+            
+            logger.info(f"[{request_id}] ✓ Analysis completed!")
+            
+            response = {
+                "request_id": request_id,
+                "status": "success",
+                "timestamp": datetime.utcnow().isoformat(),
+                "analysis_data": analysis_result.dict()
+            }
+            
+            logger.info("=" * 60)
+            logger.info("✓ TEST REQUEST PROCESSED")
+            logger.info("=" * 60 + "\n")
+            
+            return jsonify(response)
+            
+        except ImportError as e:
+            logger.error(f"Import failed: {e}")
+            logger.error(f"Current directory: {Path.cwd()}")
+            logger.error(f"Script directory: {Path(__file__).parent}")
+            logger.error(f"sys.path: {sys.path}")
+            return jsonify({
+                "status": "error",
+                "message": f"Could not import analysis_agent: {str(e)}",
+                "hint": "Make sure analysis_agent.py is in the agents/ directory"
+            }), 500
+        except Exception as e:
+            logger.error(f"Analysis failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                "status": "error",
+                "message": str(e)
+            }), 500
+    
+    except Exception as e:
+        logger.error(f"Error in test endpoint: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/status', methods=['GET'])
@@ -269,7 +363,7 @@ if __name__ == "__main__":
     init_orchestrator()
     
     logger.info("\n" + "=" * 60)
-    logger.info(" ORCHESTRATOR READY")
+    logger.info("🚀 ORCHESTRATOR READY")
     logger.info("=" * 60)
     logger.info(f"Agent Address: {orchestrator_identity.address}")
     logger.info("Webhook: http://localhost:5000/api/webhook")
