@@ -5,8 +5,8 @@
 flask==3.0.0
 flask-cors==4.0.0
 
-# Fetch.ai SDK
-fetchai==0.1.0
+# Fetch.ai AgentVerse
+fetchai-agentverse
 uagents-core==0.1.0
 
 # CrewAI and AI dependencies
