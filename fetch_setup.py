@@ -16,9 +16,9 @@ def generate_fetch_credentials():
     # Generate a secure random seed phrase
     seed_phrase = secrets.token_hex(16)  # 32 character hex string
     
-    print(f"\n📝 Generated Seed Phrase:")
+    print(f"\n Generated Seed Phrase:")
     print(f"   {seed_phrase}")
-    print(f"\n⚠️  IMPORTANT: Save this seed phrase securely!")
+    print(f"\n IMPORTANT: Save this seed phrase securely!")
     print(f"   You'll need it to recreate your agent.")
     
     # Create agent with the seed
@@ -28,19 +28,19 @@ def generate_fetch_credentials():
         port=8000
     )
     
-    print(f"\n🔑 Agent Address:")
+    print(f"\n Agent Address:")
     print(f"   {agent.address}")
     
-    print(f"\n💰 Wallet Address:")
+    print(f"\n Wallet Address:")
     print(f"   {agent.wallet.address()}")
     
     # Try to fund the agent (testnet)
-    print(f"\n💸 Attempting to fund agent on testnet...")
+    print(f"\n Attempting to fund agent on testnet...")
     try:
         fund_agent_if_low(agent.wallet.address())
         print("   ✓ Agent funded successfully!")
     except Exception as e:
-        print(f"   ⚠️  Funding failed (this is normal): {e}")
+        print(f"     Funding failed (this is normal): {e}")
         print(f"   You can fund manually at: https://faucet.fetch.ai")
     
     # Generate .env content
@@ -70,8 +70,8 @@ def verify_existing_seed(seed_phrase: str):
         )
         
         print(f"\n✓ Seed phrase is valid!")
-        print(f"\n🔑 Agent Address: {agent.address}")
-        print(f"💰 Wallet Address: {agent.wallet.address()}")
+        print(f"\n Agent Address: {agent.address}")
+        print(f" Wallet Address: {agent.wallet.address()}")
         
         return True
     except Exception as e:
@@ -144,7 +144,7 @@ def create_test_agent():
     
     @agent.on_interval(period=5.0)
     async def heartbeat(ctx: Context):
-        ctx.logger.info("Agent is running... ❤️")
+        ctx.logger.info("Agent is running... ")
     
     try:
         print("\nStarting agent (press Ctrl+C to stop)...")
