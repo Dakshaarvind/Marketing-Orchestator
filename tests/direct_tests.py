@@ -1,4 +1,3 @@
-# direct_test.py
 """
 Direct test of the Analysis Agent without Fetch.ai agent communication
 This bypasses the agent messaging issues and directly tests the CrewAI agent

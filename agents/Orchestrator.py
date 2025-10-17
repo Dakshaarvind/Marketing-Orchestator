@@ -1,4 +1,3 @@
-# agents/orchestrator_flask.py
 """
 Flask-based Orchestrator Agent for Marketing Campaign System
 Uses Fetch.ai SDK pattern with webhooks for Agentverse integration
@@ -126,7 +125,7 @@ def webhook():
         # Parse incoming message
         data = request.get_data().decode("utf-8")
         logger.info("=" * 60)
-        logger.info("📨 NEW CAMPAIGN REQUEST RECEIVED")
+        logger.info(" NEW CAMPAIGN REQUEST RECEIVED")
         logger.info("=" * 60)
         
         message = parse_message_from_agent(data)
@@ -195,9 +194,9 @@ def webhook():
             }
         
         # === STAGE 2-4: Future agents (placeholders) ===
-        logger.info(f"[{request_id}] ⏳ Competitor Research - Coming soon")
-        logger.info(f"[{request_id}] ⏳ Content Generation - Coming soon")
-        logger.info(f"[{request_id}] ⏳ Scheduling - Coming soon")
+        logger.info(f"[{request_id}]  Competitor Research - Coming soon")
+        logger.info(f"[{request_id}]  Content Generation - Coming soon")
+        logger.info(f"[{request_id}]  Scheduling - Coming soon")
         
         # Prepare response
         response_payload = {
@@ -224,7 +223,7 @@ def webhook():
         active_requests[request_id]["response"] = response_payload
         
         # Send response back to sender
-        logger.info(f"\n[{request_id}] 📤 Sending response back to {sender_address}")
+        logger.info(f"\n[{request_id}]  Sending response back to {sender_address}")
         send_message_to_agent(
             orchestrator_identity,
             sender_address,
@@ -251,7 +250,7 @@ def test_endpoint():
     """
     try:
         logger.info("=" * 60)
-        logger.info("📨 TEST REQUEST RECEIVED (No auth)")
+        logger.info(" TEST REQUEST RECEIVED (No auth)")
         logger.info("=" * 60)
         
         # Get JSON directly
@@ -363,7 +362,7 @@ if __name__ == "__main__":
     init_orchestrator()
     
     logger.info("\n" + "=" * 60)
-    logger.info("🚀 ORCHESTRATOR READY")
+    logger.info(" ORCHESTRATOR READY")
     logger.info("=" * 60)
     logger.info(f"Agent Address: {orchestrator_identity.address}")
     logger.info("Webhook: http://localhost:5000/api/webhook")
