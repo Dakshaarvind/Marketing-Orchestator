@@ -19,3 +19,7 @@
 ┌─────────────────────────┐
 │  Orchestrator Agent     │ (Send response back to Agentverse)
 └─────────────────────────┘
+
+For personal ref:
+run python orchestrator.py on one terminal
+run .\ngrok.exe http 5000 on another (this can expire)
