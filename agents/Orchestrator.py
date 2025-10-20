@@ -58,39 +58,48 @@ def init_orchestrator():
 ![domain:marketing](https://img.shields.io/badge/marketing-orchestrator-blue)
 
 <description>
-Multi-Agent Marketing Orchestrator for food industry Instagram campaigns.
-Coordinates AI agents to analyze audiences, research competitors, generate content, and schedule posts.
+AI-powered Marketing Orchestrator for food industry Instagram campaigns.
+Just describe your business and goals in plain English - I'll handle the rest!
 </description>
 
 <use_cases>
-<use_case>Analyze target audience and optimal posting times for food businesses</use_case>
+<use_case>Analyze target audience and optimal posting times</use_case>
 <use_case>Research competitor strategies and trending content</use_case>
-<use_case>Generate Instagram-ready content with captions and hashtags</use_case>
-<use_case>Schedule and auto-publish posts at optimal times</use_case>
+<use_case>Generate Instagram-ready posts with captions and hashtags</use_case>
+<use_case>Schedule posts at optimal engagement times</use_case>
 </use_cases>
 
+<examples>
+<example>I have a donut shop in Los Angeles and want to increase local foot traffic</example>
+<example>Help me market my bakery in SF. I need more corporate catering clients.</example>
+<example>I run a coffee shop and want to grow my Instagram following</example>
+<example>My restaurant in Brooklyn needs better social media presence</example>
+</examples>
+
 <payload_requirements>
-<description>Send a campaign request with business details</description>
+<description>Send your message in natural language OR as structured JSON</description>
+
+<natural_language>
+Just type naturally! Example:
+"I have a donut shop in Los Angeles and want to increase foot traffic"
+</natural_language>
+
+<structured_json>
+Or send JSON with these fields:
+</structured_json>
+
 <payload>
 <requirement>
 <parameter>business_type</parameter>
-<description>Type of food business (e.g., "donut shop", "bakery", "restaurant")</description>
+<description>Type of food business (e.g., "donut shop", "bakery")</description>
 </requirement>
 <requirement>
 <parameter>location</parameter>
-<description>Business location (e.g., "Los Angeles, CA") - optional</description>
+<description>Business location (optional)</description>
 </requirement>
 <requirement>
 <parameter>campaign_goals</parameter>
-<description>Marketing objectives (e.g., "Increase foot traffic and Instagram following")</description>
-</requirement>
-<requirement>
-<parameter>auto_publish</parameter>
-<description>Whether to auto-publish posts (true/false) - optional, defaults to false</description>
-</requirement>
-<requirement>
-<parameter>user_id</parameter>
-<description>Unique identifier for tracking - optional</description>
+<description>What you want to achieve</description>
 </requirement>
 </payload>
 </payload_requirements>
@@ -137,17 +146,29 @@ def webhook():
         logger.info(f"Payload: {json.dumps(payload, indent=2)}")
         
         # Handle Agentverse UI format (content array with text field)
+        raw_user_input = None
         if isinstance(payload, dict) and 'content' in payload:
             content = payload.get('content', [])
             if content and len(content) > 0:
                 # Get the text from first content item
                 text_data = content[0].get('text', '{}')
-                # Parse the JSON string
+                raw_user_input = text_data
+                logger.info(f"Raw user input: {text_data}")
+                
+                # Try to parse as JSON first
                 try:
                     payload = json.loads(text_data)
-                    logger.info(f"Parsed payload from content: {json.dumps(payload, indent=2)}")
+                    logger.info(f"Parsed as JSON: {json.dumps(payload, indent=2)}")
                 except json.JSONDecodeError:
-                    logger.error(f"Failed to parse text as JSON: {text_data}")
+                    # Not JSON - treat as natural language
+                    logger.info("Input is natural language, parsing...")
+                    try:
+                        from nl_parser import parse_user_input
+                        payload = parse_user_input(text_data)
+                        logger.info(f"Parsed from natural language: {json.dumps(payload, indent=2)}")
+                    except Exception as e:
+                        logger.error(f"Failed to parse natural language: {e}")
+                        return jsonify({"error": "Could not understand input"}), 400
         
         # Extract campaign parameters
         business_type = payload.get('business_type')
@@ -237,12 +258,18 @@ def webhook():
         active_requests[request_id]["response"] = response_payload
         
         # Send response back to sender
-        logger.info(f"\n[{request_id}]  Sending response back to {sender_address}")
-        send_message_to_agent(
-            orchestrator_identity,
-            sender_address,
-            response_payload
-        )
+        logger.info(f"\n[{request_id}] Sending response back to {sender_address}")
+        
+        try:
+            send_message_to_agent(
+                orchestrator_identity,
+                sender_address,
+                response_payload
+            )
+            logger.info(f"[{request_id}] ✓ Response sent successfully!")
+        except Exception as e:
+            logger.error(f"[{request_id}] ✗ Failed to send response: {e}")
+            # Still return success to webhook caller even if response send fails
         
         logger.info("=" * 60)
         logger.info("✓ CAMPAIGN REQUEST PROCESSED")
