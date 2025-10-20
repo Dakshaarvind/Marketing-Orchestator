@@ -1,3 +1,4 @@
+# agents/orchestrator_flask.py
 """
 Flask-based Orchestrator Agent for Marketing Campaign System
 Uses Fetch.ai SDK pattern with webhooks for Agentverse integration
@@ -135,6 +136,19 @@ def webhook():
         logger.info(f"From: {sender_address}")
         logger.info(f"Payload: {json.dumps(payload, indent=2)}")
         
+        # Handle Agentverse UI format (content array with text field)
+        if isinstance(payload, dict) and 'content' in payload:
+            content = payload.get('content', [])
+            if content and len(content) > 0:
+                # Get the text from first content item
+                text_data = content[0].get('text', '{}')
+                # Parse the JSON string
+                try:
+                    payload = json.loads(text_data)
+                    logger.info(f"Parsed payload from content: {json.dumps(payload, indent=2)}")
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse text as JSON: {text_data}")
+        
         # Extract campaign parameters
         business_type = payload.get('business_type')
         location = payload.get('location')
@@ -163,7 +177,7 @@ def webhook():
         }
         
         # === STAGE 1: Run Analysis Agent ===
-        logger.info(f"\n[{request_id}] 🔍 Running Analysis Agent...")
+        logger.info(f"\n[{request_id}]  Running Analysis Agent...")
         
         try:
             from analysis_agent import run_analysis_agent
@@ -278,7 +292,7 @@ def test_endpoint():
         request_id = f"{user_id}_{int(datetime.utcnow().timestamp())}"
         
         # Run Analysis
-        logger.info(f"[{request_id}] 🔍 Running Analysis Agent...")
+        logger.info(f"[{request_id}]  Running Analysis Agent...")
         
         try:
             # Try importing from same directory
