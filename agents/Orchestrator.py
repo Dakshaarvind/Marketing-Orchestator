@@ -228,9 +228,30 @@ def webhook():
                 "message": "Analysis execution failed"
             }
         
-        # === STAGE 2-4: Future agents (placeholders) ===
+        # === STAGE 2: Content Generation ===
+        logger.info(f"[{request_id}]  Content Generation - Starting")
+        content_data = {
+            "status": "pending",
+            "message": "Content Generation Agent not executed",
+        }
+        try:
+            from content_generation import run_content_agent
+            content_result = run_content_agent(
+                business_type=business_type,
+                campaign_goals=campaign_goals,
+                analysis_data=analysis_data if isinstance(analysis_data, dict) else {},
+            )
+            content_data = content_result.dict()
+            logger.info(f"[{request_id}] ✓ Content generated!")
+        except Exception as e:
+            logger.error(f"[{request_id}] ✗ Content generation failed: {e}")
+            content_data = {
+                "status": "error",
+                "message": str(e),
+            }
+
+        # === STAGE 3-4: Future agents (placeholders) ===
         logger.info(f"[{request_id}]  Competitor Research - Coming soon")
-        logger.info(f"[{request_id}]  Content Generation - Coming soon")
         logger.info(f"[{request_id}]  Scheduling - Coming soon")
         
         # Prepare response
@@ -243,10 +264,7 @@ def webhook():
                 "status": "pending",
                 "message": "Competitor Research Agent not yet implemented"
             },
-            "content_plan": {
-                "status": "pending",
-                "message": "Content Generation Agent not yet implemented"
-            },
+            "content_plan": content_data,
             "schedule_data": {
                 "status": "pending",
                 "message": "Scheduler Agent not yet implemented"
