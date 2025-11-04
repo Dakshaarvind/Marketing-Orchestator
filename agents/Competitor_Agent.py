@@ -1,4 +1,4 @@
-
+# agents/competitor_agent.py
 """
 Competitor Research Agent using Yelp Fusion API
 Finds real competitors and analyzes their reviews for insights
@@ -108,17 +108,24 @@ class YelpClient:
             data = response.json()
             return data.get('reviews', [])
             
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                # 404 is common - reviews not available for this business
+                return []
+            print(f"HTTP Error getting reviews: {e}")
+            return []
         except requests.exceptions.RequestException as e:
             print(f"Error getting reviews: {e}")
             return []
 
 # Review Analysis
-def analyze_reviews_with_llm(all_reviews: List[str], business_type: str) -> Dict:
+def analyze_competitors_with_llm(competitors_data: List[Dict], business_type: str) -> Dict:
     """
-    Use LLM to analyze competitor reviews and extract insights
+    Use LLM to analyze competitors and extract insights
+    Uses business data (ratings, categories, review counts) instead of review text
     
     Args:
-        all_reviews: List of review texts
+        competitors_data: List of competitor business info
         business_type: Type of business being analyzed
         
     Returns:
@@ -126,33 +133,44 @@ def analyze_reviews_with_llm(all_reviews: List[str], business_type: str) -> Dict
     """
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
-    # Combine reviews
-    reviews_text = "\n\n".join([f"Review {i+1}: {review}" for i, review in enumerate(all_reviews)])
+    # Build competitor summary from business data
+    competitor_summary = []
+    for comp in competitors_data:
+        summary = f"""
+Business: {comp['name']}
+Rating: {comp['rating']}/5.0 ({comp['review_count']} reviews)
+Price: {comp.get('price', 'N/A')}
+Categories: {', '.join([cat['title'] for cat in comp.get('categories', [])])}
+Location: {', '.join(comp['location']['display_address'])}
+"""
+        competitor_summary.append(summary)
     
-    prompt = f"""Analyze these customer reviews from competing {business_type} businesses:
+    competitors_text = "\n---\n".join(competitor_summary)
+    
+    prompt = f"""Analyze these competing {business_type} businesses and extract Instagram marketing insights:
 
-{reviews_text}
+{competitors_text}
 
-Extract the following insights in JSON format:
+Based on their ratings, review counts, pricing, and categories, provide insights in JSON format:
 
-1. trending_themes: What themes/topics appear most frequently? (list of 3-5 strings)
-2. customer_priorities: What do customers care about most? (list of 3-5 strings)
-3. common_complaints: What issues appear across multiple reviews? (list of 2-4 strings)
-4. content_opportunities: Based on gaps/unmet needs, what Instagram content would resonate? (list of 3-5 strings)
-5. recommended_hashtags: Based on popular items and themes mentioned (list of 5-8 hashtags with #)
+1. trending_themes: What themes/strategies are working? (3-5 strings, e.g., "High ratings indicate quality focus", "Multiple locations suggest strong brand")
+2. customer_priorities: What do customers value? (3-5 strings, inferred from high-rated businesses)
+3. common_complaints: Potential weaknesses to avoid (2-4 strings, inferred from lower ratings or gaps)
+4. content_opportunities: Instagram content ideas based on competitor positioning (3-5 strings)
+5. recommended_hashtags: Relevant hashtags for {business_type} (5-8 hashtags with #)
 
-Return ONLY valid JSON with these exact keys.
+Return ONLY valid JSON with these exact keys. Be specific and actionable.
 """
     
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are an expert at analyzing customer reviews and extracting marketing insights."},
+                {"role": "system", "content": "You are an expert at competitive analysis and Instagram marketing strategy."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3,
-            max_tokens=500
+            temperature=0.4,
+            max_tokens=600
         )
         
         result_text = response.choices[0].message.content.strip()
@@ -166,24 +184,51 @@ Return ONLY valid JSON with these exact keys.
             insights = json.loads(json_str)
             return insights
         else:
-            # Fallback
-            return {
-                "trending_themes": ["Quality and freshness", "Variety"],
-                "customer_priorities": ["Taste", "Value"],
-                "common_complaints": ["Long wait times"],
-                "content_opportunities": ["Showcase daily fresh items", "Behind-the-scenes content"],
-                "recommended_hashtags": [f"#{business_type.replace(' ', '')}", "#foodie", "#local"]
-            }
+            # Fallback based on business data
+            return generate_fallback_insights(competitors_data, business_type)
             
     except Exception as e:
-        print(f"Error analyzing reviews with LLM: {e}")
-        return {
-            "trending_themes": [],
-            "customer_priorities": [],
-            "common_complaints": [],
-            "content_opportunities": [],
-            "recommended_hashtags": []
-        }
+        print(f"Error analyzing with LLM: {e}")
+        return generate_fallback_insights(competitors_data, business_type)
+
+def generate_fallback_insights(competitors_data: List[Dict], business_type: str) -> Dict:
+    """Generate basic insights when LLM fails"""
+    avg_rating = sum(c['rating'] for c in competitors_data) / len(competitors_data) if competitors_data else 0
+    
+    # Extract unique categories
+    all_categories = []
+    for comp in competitors_data:
+        all_categories.extend([cat['title'] for cat in comp.get('categories', [])])
+    unique_categories = list(set(all_categories))
+    
+    return {
+        "trending_themes": [
+            f"Average competitor rating: {avg_rating:.1f}/5.0 - quality is important",
+            f"Common categories: {', '.join(unique_categories[:3])}"
+        ],
+        "customer_priorities": [
+            "Quality and consistency",
+            "Good value for price",
+            "Convenient location"
+        ],
+        "common_complaints": [
+            "Competition is strong in this area",
+            "Differentiation needed"
+        ],
+        "content_opportunities": [
+            "Highlight unique offerings",
+            "Showcase quality ingredients",
+            "Share customer testimonials",
+            "Behind-the-scenes content"
+        ],
+        "recommended_hashtags": [
+            f"#{business_type.replace(' ', '')}",
+            "#foodie",
+            "#local",
+            "#instafood",
+            "#delicious"
+        ]
+    }
 
 # Main function
 def run_competitor_agent(
@@ -207,7 +252,7 @@ def run_competitor_agent(
     if not location:
         location = "United States"
     
-    print(f"\n Searching for {business_type} competitors in {location}...")
+    print(f"\n🔍 Searching for {business_type} competitors in {location}...")
     
     # Initialize Yelp client
     yelp = YelpClient(api_key)
@@ -221,7 +266,7 @@ def run_competitor_agent(
     )
     
     if not businesses:
-        print("  No competitors found on Yelp")
+        print("⚠️  No competitors found on Yelp")
         return CompetitorInsights(
             competitors=[],
             trending_themes=["No data available"],
@@ -233,17 +278,12 @@ def run_competitor_agent(
     
     print(f"✓ Found {len(businesses)} competitors")
     
-    # Build competitor profiles and collect reviews
+    # Build competitor profiles
     competitors = []
-    all_reviews = []
     
     for biz in businesses:
-        # Get reviews for this business
+        # Get reviews for this business (but don't fail if 404)
         reviews = yelp.get_reviews(biz['id'], limit=3)
-        
-        # Extract review texts
-        review_texts = [r['text'] for r in reviews]
-        all_reviews.extend(review_texts)
         
         # Create competitor profile
         competitor = CompetitorProfile(
@@ -255,26 +295,17 @@ def run_competitor_agent(
             categories=[cat['title'] for cat in biz.get('categories', [])],
             location=', '.join(biz['location']['display_address']),
             phone=biz.get('phone'),
-            popular_items=[]  # Will be extracted from reviews
+            popular_items=[]
         )
         
         competitors.append(competitor)
         
-        print(f"  • {biz['name']}: {biz['rating']} ({biz['review_count']} reviews)")
+        print(f"  • {biz['name']}: {biz['rating']}⭐ ({biz['review_count']} reviews)")
     
-    # Analyze all reviews with LLM
-    print(f"\n Analyzing {len(all_reviews)} reviews...")
+    # Analyze competitors using business data (not reviews)
+    print(f"\n🤖 Analyzing {len(businesses)} competitors...")
     
-    if all_reviews:
-        insights = analyze_reviews_with_llm(all_reviews, business_type)
-    else:
-        insights = {
-            "trending_themes": [],
-            "customer_priorities": [],
-            "common_complaints": [],
-            "content_opportunities": [],
-            "recommended_hashtags": []
-        }
+    insights = analyze_competitors_with_llm(businesses, business_type)
     
     print("✓ Analysis complete!")
     
@@ -302,28 +333,28 @@ if __name__ == "__main__":
     print("COMPETITOR ANALYSIS RESULTS")
     print("=" * 60)
     
-    print(f"\n Found {len(result.competitors)} Competitors:")
+    print(f"\n📊 Found {len(result.competitors)} Competitors:")
     for comp in result.competitors:
         print(f"\n  • {comp.business_name}")
-        print(f"    Rating: {comp.rating} ({comp.review_count} reviews)")
+        print(f"    Rating: {comp.rating}⭐ ({comp.review_count} reviews)")
         print(f"    Price: {comp.price or 'N/A'}")
         print(f"    Location: {comp.location}")
     
-    print(f"\n Trending Themes:")
+    print(f"\n🔥 Trending Themes:")
     for theme in result.trending_themes:
         print(f"  • {theme}")
     
-    print(f"\n Customer Priorities:")
+    print(f"\n⭐ Customer Priorities:")
     for priority in result.customer_priorities:
         print(f"  • {priority}")
     
-    print(f"\n  Common Complaints:")
+    print(f"\n⚠️  Common Complaints:")
     for complaint in result.common_complaints:
         print(f"  • {complaint}")
     
-    print(f"\n Content Opportunities:")
+    print(f"\n💡 Content Opportunities:")
     for opp in result.content_opportunities:
         print(f"  • {opp}")
     
-    print(f"\n#️ Recommended Hashtags:")
+    print(f"\n#️⃣ Recommended Hashtags:")
     print(f"  {' '.join(result.recommended_hashtags)}")
