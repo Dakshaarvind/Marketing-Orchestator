@@ -14,7 +14,7 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, UTC
 import json
 
 # Add agents directory to path for imports
@@ -39,6 +39,61 @@ CORS(app)
 # Global variables
 orchestrator_identity = None
 active_requests = {}
+
+def create_final_instagram_post(analysis_data: dict, content_data: dict, seo_data: dict) -> dict:
+    """
+    Consolidate all agent outputs into a final Instagram-ready post format
+    
+    Args:
+        analysis_data: Output from Analysis Agent
+        content_data: Output from Content Generation Agent
+        seo_data: Output from SEO Agent
+        
+    Returns:
+        Dict with complete Instagram post ready to use
+    """
+    # Use SEO-optimized content if available, otherwise fall back to original
+    final_caption = seo_data.get('optimized_caption') if isinstance(seo_data, dict) and seo_data.get('optimized_caption') else content_data.get('caption', '')
+    final_hashtags = seo_data.get('optimized_hashtags') if isinstance(seo_data, dict) and seo_data.get('optimized_hashtags') else content_data.get('hashtags', [])
+    
+    # Combine location tags from SEO with main hashtags
+    location_tags = seo_data.get('location_tags', []) if isinstance(seo_data, dict) else []
+    all_hashtags = final_hashtags + location_tags
+    
+    # Build final post - everything needed for Instagram posting
+    final_post = {
+        # Core Instagram post content
+        "caption": final_caption,
+        "hashtags": all_hashtags,
+        "hashtag_string": ' '.join(all_hashtags),  # For easy copy-paste
+        "post_type": content_data.get('post_type', 'Photo'),
+        "call_to_action": content_data.get('call_to_action', ''),
+        
+        # Posting details
+        "suggested_post_time": content_data.get('suggested_post_time'),
+        "engagement_times": analysis_data.get('engagement_times', []) if isinstance(analysis_data, dict) else [],
+        
+        # Media/Image information
+        "media_prompts": content_data.get('media_prompts', []),  # Ideas for images/videos
+        "image_prompt": seo_data.get('alt_text_suggestion') if isinstance(seo_data, dict) else None,  # Can be used for image generation
+        "alt_text": seo_data.get('alt_text_suggestion') if isinstance(seo_data, dict) else None,  # For accessibility
+        "image_url": None,  # Placeholder - would be populated if image generation is added
+        
+        # SEO & Optimization
+        "keywords": seo_data.get('keyword_suggestions', []) if isinstance(seo_data, dict) else [],
+        "seo_score": seo_data.get('seo_score', 0) if isinstance(seo_data, dict) else 0,
+        "seo_improvements": seo_data.get('improvements', []) if isinstance(seo_data, dict) else [],
+        
+        # Audience insights (for reference)
+        "target_audience": analysis_data.get('target_audience', '') if isinstance(analysis_data, dict) else '',
+        "content_tone": analysis_data.get('content_tone', '') if isinstance(analysis_data, dict) else '',
+        "post_frequency": analysis_data.get('recommended_post_frequency', 0) if isinstance(analysis_data, dict) else 0,
+        
+        # Additional notes
+        "notes": content_data.get('notes', ''),
+    }
+    
+    return final_post
 
 def init_orchestrator():
     """Initialize and register the orchestrator agent with Agentverse"""
@@ -189,12 +244,12 @@ def webhook():
             return jsonify({"status": "error", "message": error_msg}), 400
         
         # Generate request ID
-        request_id = f"{user_id}_{int(datetime.utcnow().timestamp())}"
+        request_id = f"{user_id}_{int(datetime.now(UTC).timestamp())}"
         active_requests[request_id] = {
             "payload": payload,
             "sender": sender_address,
             "status": "processing",
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(UTC).isoformat()
         }
         
         # === STAGE 1: Run Analysis Agent ===
@@ -289,17 +344,71 @@ def webhook():
                 "message": str(e),
             }
 
-        # === STAGE 4: Scheduling (placeholder) ===
+        # === STAGE 4: SEO Optimization ===
+        logger.info(f"[{request_id}]  SEO Optimization - Starting")
+        seo_data = {
+            "status": "pending",
+            "message": "SEO Agent not executed",
+        }
+        try:
+            from seo_agent import run_seo_agent
+            # Only run SEO if content generation was successful
+            if isinstance(content_data, dict) and "caption" in content_data:
+                seo_result = run_seo_agent(
+                    business_type=business_type,
+                    location=location,
+                    content_data=content_data,
+                    campaign_goals=campaign_goals,
+                )
+                seo_data = seo_result.dict()
+                logger.info(f"[{request_id}] ✓ SEO optimization completed!")
+                logger.info(f"   SEO Score: {seo_result.seo_score}/100")
+                logger.info(f"   Optimized Hashtags: {len(seo_result.optimized_hashtags)} tags")
+            else:
+                logger.warning(f"[{request_id}] ⚠ Skipping SEO - content generation failed or incomplete")
+                seo_data = {
+                    "status": "skipped",
+                    "message": "Content generation incomplete, cannot optimize",
+                }
+        except ImportError as e:
+            logger.error(f"[{request_id}] ✗ Could not import seo_agent: {e}")
+            seo_data = {
+                "status": "error",
+                "message": "seo_agent module not found",
+            }
+        except Exception as e:
+            logger.error(f"[{request_id}] ✗ SEO optimization failed: {e}")
+            seo_data = {
+                "status": "error",
+                "message": str(e),
+            }
+
+        # === STAGE 5: Create Final Instagram Post ===
+        logger.info(f"[{request_id}]  Consolidating final Instagram post...")
+        
+        # Create consolidated final post
+        final_post = create_final_instagram_post(analysis_data, content_data, seo_data)
+        
+        logger.info(f"[{request_id}] ✓ Final Instagram post ready!")
+        logger.info(f"   Caption: {final_post['caption'][:80]}...")
+        logger.info(f"   Hashtags: {len(final_post['hashtags'])} tags")
+        logger.info(f"   Post Type: {final_post['post_type']}")
+        logger.info(f"   Post Time: {final_post['suggested_post_time']}")
+        logger.info(f"   SEO Score: {final_post['seo_score']}/100")
+
+        # === STAGE 6: Scheduling (placeholder) ===
         logger.info(f"[{request_id}]  Scheduling - Coming soon")
         
-        # Prepare response
+        # Prepare response with both detailed data and final post
         response_payload = {
             "request_id": request_id,
             "status": "success",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
+            "instagram_post": final_post,  # Main consolidated post ready to use
             "analysis_data": analysis_data,
             "competitor_data": competitor_data,
             "content_plan": content_data,
+            "seo_optimization": seo_data,
             "schedule_data": {
                 "status": "pending",
                 "message": "Scheduler Agent not yet implemented"
@@ -369,7 +478,7 @@ def test_endpoint():
             }), 400
         
         # Generate request ID
-        request_id = f"{user_id}_{int(datetime.utcnow().timestamp())}"
+        request_id = f"{user_id}_{int(datetime.now(UTC).timestamp())}"
         
         # Run Analysis
         logger.info(f"[{request_id}]  Running Analysis Agent...")
@@ -397,7 +506,7 @@ def test_endpoint():
             response = {
                 "request_id": request_id,
                 "status": "success",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "analysis_data": analysis_result.dict()
             }
             
