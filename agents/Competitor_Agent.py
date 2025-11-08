@@ -1,17 +1,22 @@
 # agents/competitor_agent.py
 """
-Competitor Research Agent using Yelp Fusion API
+Competitor Research Agent using Yelp Fusion API and Crew AI
 Finds real competitors and analyzes their reviews for insights
 """
-import requests
 import os
+import json
+import requests
 from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
-import json
-from openai import OpenAI
+from crewai import Agent, Task, Crew, Process
 from dotenv import load_dotenv
+from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_openai import ChatOpenAI
 
 load_dotenv()
+
+# Initialize tools
+search_tool = DuckDuckGoSearchRun()
 
 # Pydantic Models
 class CompetitorProfile(BaseModel):
@@ -34,6 +39,12 @@ class CompetitorInsights(BaseModel):
     common_complaints: List[str]
     content_opportunities: List[str]
     recommended_hashtags: List[str]
+    # Fields that align with content generation agent
+    target_audience: str = Field(default="Local food enthusiasts")
+    engagement_times: List[str] = Field(default_factory=list)
+    content_tone: str = Field(default="authentic and engaging")
+    market_positioning: str = Field(default="Analyzing competitor positioning...")
+    suggested_price_point: Optional[str] = Field(default=None)
 
 # Yelp API Client
 class YelpClient:
@@ -119,21 +130,40 @@ class YelpClient:
             return []
 
 # Review Analysis
-def analyze_competitors_with_llm(competitors_data: List[Dict], business_type: str) -> Dict:
+# Define Crew AI Agents
+def create_competitor_research_crew(competitors_data: List[Dict], business_type: str) -> Dict:
     """
-    Use LLM to analyze competitors and extract insights
-    Uses business data (ratings, categories, review counts) instead of review text
-    
-    Args:
-        competitors_data: List of competitor business info
-        business_type: Type of business being analyzed
-        
-    Returns:
-        Dict with themes, priorities, complaints, opportunities
+    Create and run a Crew AI workflow for competitor analysis
     """
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    # Create LLM
+    llm = ChatOpenAI(
+        model="gpt-4",
+        temperature=0.7,
+        openai_api_key=os.getenv("OPENAI_API_KEY")
+    )
     
-    # Build competitor summary from business data
+    # Create Agents
+    market_researcher = Agent(
+        role='Market Research Analyst',
+        goal='Analyze competitor data and identify market trends',
+        backstory="""You are an expert market researcher specializing in the food industry. 
+        Your analysis helps businesses understand their competitive landscape and market positioning.""",
+        tools=[search_tool],
+        llm=llm,
+        verbose=True
+    )
+    
+    social_strategist = Agent(
+        role='Social Media Strategist',
+        goal='Develop actionable social media insights from competitor analysis',
+        backstory="""You are an Instagram marketing specialist who helps food businesses grow their presence.
+        You turn competitor insights into practical content strategies.""",
+        tools=[search_tool],
+        llm=llm,
+        verbose=True
+    )
+    
+    # Build competitor summary
     competitor_summary = []
     for comp in competitors_data:
         summary = f"""
@@ -147,49 +177,57 @@ Location: {', '.join(comp['location']['display_address'])}
     
     competitors_text = "\n---\n".join(competitor_summary)
     
-    prompt = f"""Analyze these competing {business_type} businesses and extract Instagram marketing insights:
-
-{competitors_text}
-
-Based on their ratings, review counts, pricing, and categories, provide insights in JSON format:
-
-1. trending_themes: What themes/strategies are working? (3-5 strings, e.g., "High ratings indicate quality focus", "Multiple locations suggest strong brand")
-2. customer_priorities: What do customers value? (3-5 strings, inferred from high-rated businesses)
-3. common_complaints: Potential weaknesses to avoid (2-4 strings, inferred from lower ratings or gaps)
-4. content_opportunities: Instagram content ideas based on competitor positioning (3-5 strings)
-5. recommended_hashtags: Relevant hashtags for {business_type} (5-8 hashtags with #)
-
-Return ONLY valid JSON with these exact keys. Be specific and actionable.
-"""
+    # Create Tasks
+    analyze_market = Task(
+        description=f"""Analyze these {business_type} competitors and identify key trends:
+        
+        {competitors_text}
+        
+        Identify:
+        1. Market positioning
+        2. Common success factors
+        3. Service gaps and opportunities
+        4. Target audience preferences
+        
+        Format as clear bullet points.""",
+        agent=market_researcher
+    )
+    
+    create_strategy = Task(
+        description="""Using the market analysis, create an Instagram strategy plan with:
+        
+        1. trending_themes: 3-5 key themes that are working in this market
+        2. customer_priorities: 3-5 things customers value most
+        3. common_complaints: 2-4 pain points to address
+        4. content_opportunities: 3-5 specific content ideas
+        5. recommended_hashtags: 5-8 relevant hashtags (with #)
+        
+        Return ONLY as a JSON object with these exact keys.""",
+        agent=social_strategist
+    )
+    
+    # Create and run crew
+    crew = Crew(
+        agents=[market_researcher, social_strategist],
+        tasks=[analyze_market, create_strategy],
+        verbose=True,
+        process=Process.sequential
+    )
+    
+    result = crew.kickoff()
     
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are an expert at competitive analysis and Instagram marketing strategy."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.4,
-            max_tokens=600
-        )
-        
-        result_text = response.choices[0].message.content.strip()
-        
-        # Extract JSON
-        start_idx = result_text.find('{')
-        end_idx = result_text.rfind('}') + 1
-        
+        # Extract JSON from the final result
+        start_idx = result.find('{')
+        end_idx = result.rfind('}') + 1
         if start_idx != -1 and end_idx > start_idx:
-            json_str = result_text[start_idx:end_idx]
-            insights = json.loads(json_str)
-            return insights
-        else:
-            # Fallback based on business data
-            return generate_fallback_insights(competitors_data, business_type)
-            
-    except Exception as e:
-        print(f"Error analyzing with LLM: {e}")
-        return generate_fallback_insights(competitors_data, business_type)
+            json_str = result[start_idx:end_idx]
+            return json.loads(json_str)
+    except:
+        pass
+    
+    # Fallback if JSON parsing fails
+    return generate_fallback_insights(competitors_data, business_type)
 
 def generate_fallback_insights(competitors_data: List[Dict], business_type: str) -> Dict:
     """Generate basic insights when LLM fails"""
@@ -200,6 +238,16 @@ def generate_fallback_insights(competitors_data: List[Dict], business_type: str)
     for comp in competitors_data:
         all_categories.extend([cat['title'] for cat in comp.get('categories', [])])
     unique_categories = list(set(all_categories))
+    
+    # Get price range
+    prices = [c.get('price', '') for c in competitors_data if c.get('price')]
+    if prices:
+        price_range = f"{min(prices, key=len)} - {max(prices, key=len)}"
+    else:
+        price_range = "Competitive pricing"
+
+    # Determine peak times (simplified)
+    peak_times = ["11:30", "13:30", "18:30"]  # Common meal times
     
     return {
         "trending_themes": [
@@ -227,7 +275,13 @@ def generate_fallback_insights(competitors_data: List[Dict], business_type: str)
             "#local",
             "#instafood",
             "#delicious"
-        ]
+        ],
+        # Additional fields for content generation alignment
+        "target_audience": f"Local {business_type} enthusiasts seeking quality dining experiences",
+        "engagement_times": peak_times,
+        "content_tone": "authentic and engaging",
+        "market_positioning": f"Competitive {business_type} market with focus on quality and service",
+        "suggested_price_point": price_range
     }
 
 # Main function
@@ -305,7 +359,7 @@ def run_competitor_agent(
     # Analyze competitors using business data (not reviews)
     print(f"\n🤖 Analyzing {len(businesses)} competitors...")
     
-    insights = analyze_competitors_with_llm(businesses, business_type)
+    insights = create_competitor_research_crew(businesses, business_type)
     
     print("✓ Analysis complete!")
     

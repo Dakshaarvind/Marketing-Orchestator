@@ -47,10 +47,15 @@ class ContentAgentConfig:
         campaign_goals: str,
         analysis: Dict,
     ) -> Task:
+        """Create the generation task informed by analysis and competitor data"""
         """Create the generation task informed by analysis"""
         target_audience = analysis.get("target_audience", "local audience")
         engagement_times = analysis.get("engagement_times", [])
         content_tone = analysis.get("content_tone", "friendly")
+        competitor_themes = analysis.get("competitor_themes", [])
+        competitor_hashtags = analysis.get("competitor_hashtags", [])
+        market_position = analysis.get("market_positioning", "")
+        price_point = analysis.get("suggested_price_point", "")
 
         task_description = f"""
         Using the insights below, generate a single Instagram-ready post.
@@ -62,14 +67,21 @@ class ContentAgentConfig:
         Engagement Times: {', '.join(engagement_times) if engagement_times else 'not specified'}
         Recommended Tone: {content_tone}
 
+        Market Context:
+        - Competitor Themes: {', '.join(competitor_themes) if competitor_themes else 'Not available'}
+        - Market Position: {market_position}
+        - Price Point: {price_point}
+
         Requirements:
         - Produce a concise, engaging caption matching the tone
         - Include a clear call-to-action aligned with the goal
         - Recommend the best post type (Reel | Story | Carousel | Photo) for this content
         - Provide 10-15 relevant, non-spammy hashtags (no banned hashtags)
+          Consider these competitor hashtags: {', '.join(competitor_hashtags) if competitor_hashtags else 'Not available'}
         - Suggest 2-4 media prompts (image or short reel ideas)
         - If engagement times are provided, pick one as suggested_post_time
         - Avoid ALL caps and excessive emojis; use at most 1-2 where appropriate
+        - Position content uniquely against competitors while staying authentic
 
         Return a JSON object matching this schema exactly:
         {{
@@ -116,6 +128,7 @@ def run_content_agent(
     business_type: str,
     campaign_goals: str,
     analysis_data: Dict,
+    competitor_data: Optional[Dict] = None,
     api_key: Optional[str] = None,
 ) -> ContentOutput:
     """Run content generation using the same OpenAI key as analysis."""
@@ -128,11 +141,22 @@ def run_content_agent(
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
 
     agent = ContentAgentConfig.create_agent(llm)
+    # Merge analysis and competitor data for richer insights
+    combined_data = {**analysis_data}
+    if competitor_data:
+        # Add competitor insights to analysis data
+        combined_data.update({
+            "competitor_themes": competitor_data.get("trending_themes", []),
+            "competitor_hashtags": competitor_data.get("recommended_hashtags", []),
+            "market_positioning": competitor_data.get("market_positioning", ""),
+            "suggested_price_point": competitor_data.get("suggested_price_point", "")
+        })
+    
     task = ContentAgentConfig.create_task(
         agent=agent,
         business_type=business_type,
         campaign_goals=campaign_goals,
-        analysis=analysis_data,
+        analysis=combined_data,
     )
 
     crew = Crew(agents=[agent], tasks=[task], verbose=True)
