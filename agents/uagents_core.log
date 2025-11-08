@@ -57,3 +57,4 @@ requests.exceptions.HTTPError: 401 Client Error: Unauthorized for url: https://a
 2025-11-07 16:48:52,566 uagents_core.utils.resolver INFO Got response looking up agent endpoint
 2025-11-07 16:50:06,427 uagents_core.utils.registration INFO Registering with Almanac API
 2025-11-07 16:50:11,899 uagents_core.utils.resolver INFO Got response looking up agent endpoint
+2025-11-07 16:50:44,595 uagents_core.utils.resolver INFO Got response looking up agent endpoint
