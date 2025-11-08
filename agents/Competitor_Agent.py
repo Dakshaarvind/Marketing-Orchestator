@@ -1,6 +1,6 @@
 # agents/competitor_agent.py
 """
-Competitor Research Agent using Yelp Fusion API and Crew AI
+Competitor Research Agent using Yelp Fusion API
 Finds real competitors and analyzes their reviews for insights
 """
 import os
@@ -10,13 +10,9 @@ from typing import List, Optional, Dict
 from pydantic import BaseModel, Field
 from crewai import Agent, Task, Crew, Process
 from dotenv import load_dotenv
-from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_openai import ChatOpenAI
 
 load_dotenv()
-
-# Initialize tools
-search_tool = DuckDuckGoSearchRun()
 
 # Pydantic Models
 class CompetitorProfile(BaseModel):
@@ -39,12 +35,6 @@ class CompetitorInsights(BaseModel):
     common_complaints: List[str]
     content_opportunities: List[str]
     recommended_hashtags: List[str]
-    # Fields that align with content generation agent
-    target_audience: str = Field(default="Local food enthusiasts")
-    engagement_times: List[str] = Field(default_factory=list)
-    content_tone: str = Field(default="authentic and engaging")
-    market_positioning: str = Field(default="Analyzing competitor positioning...")
-    suggested_price_point: Optional[str] = Field(default=None)
 
 # Yelp API Client
 class YelpClient:
@@ -67,18 +57,7 @@ class YelpClient:
         limit: int = 5,
         sort_by: str = "rating"
     ) -> List[Dict]:
-        """
-        Search for businesses on Yelp
-        
-        Args:
-            term: Business type (e.g., "donut shop")
-            location: Location to search (e.g., "Los Angeles, CA")
-            limit: Number of results (max 50)
-            sort_by: Sort criteria ("rating", "review_count", "distance")
-            
-        Returns:
-            List of business dictionaries
-        """
+        """Search for businesses on Yelp"""
         url = f"{self.base_url}/businesses/search"
         params = {
             "term": term,
@@ -99,16 +78,7 @@ class YelpClient:
             return []
     
     def get_reviews(self, business_id: str, limit: int = 3) -> List[Dict]:
-        """
-        Get reviews for a specific business
-        
-        Args:
-            business_id: Yelp business ID
-            limit: Number of reviews to fetch (max 3 on free tier)
-            
-        Returns:
-            List of review dictionaries
-        """
+        """Get reviews for a specific business"""
         url = f"{self.base_url}/businesses/{business_id}/reviews"
         params = {"limit": limit}
         
@@ -121,7 +91,6 @@ class YelpClient:
             
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 404:
-                # 404 is common - reviews not available for this business
                 return []
             print(f"HTTP Error getting reviews: {e}")
             return []
@@ -129,27 +98,25 @@ class YelpClient:
             print(f"Error getting reviews: {e}")
             return []
 
-# Review Analysis
-# Define Crew AI Agents
+# Competitor Analysis with CrewAI
 def create_competitor_research_crew(competitors_data: List[Dict], business_type: str) -> Dict:
-    """
-    Create and run a Crew AI workflow for competitor analysis
-    """
+    """Create and run a Crew AI workflow for competitor analysis"""
+    
     # Create LLM
     llm = ChatOpenAI(
-        model="gpt-4",
+        model="gpt-4o-mini",
         temperature=0.7,
-        openai_api_key=os.getenv("OPENAI_API_KEY")
+        api_key=os.getenv("OPENAI_API_KEY")
     )
     
-    # Create Agents
+    # Create Agents WITHOUT tools (tools causing the error)
     market_researcher = Agent(
         role='Market Research Analyst',
         goal='Analyze competitor data and identify market trends',
         backstory="""You are an expert market researcher specializing in the food industry. 
         Your analysis helps businesses understand their competitive landscape and market positioning.""",
-        tools=[search_tool],
         llm=llm,
+        allow_delegation=False,
         verbose=True
     )
     
@@ -158,8 +125,8 @@ def create_competitor_research_crew(competitors_data: List[Dict], business_type:
         goal='Develop actionable social media insights from competitor analysis',
         backstory="""You are an Instagram marketing specialist who helps food businesses grow their presence.
         You turn competitor insights into practical content strategies.""",
-        tools=[search_tool],
         llm=llm,
+        allow_delegation=False,
         verbose=True
     )
     
@@ -184,26 +151,31 @@ Location: {', '.join(comp['location']['display_address'])}
         {competitors_text}
         
         Identify:
-        1. Market positioning
-        2. Common success factors
-        3. Service gaps and opportunities
-        4. Target audience preferences
+        1. Market positioning (how these businesses position themselves)
+        2. Common success factors (what makes them highly rated)
+        3. Service gaps and opportunities (what's missing)
+        4. Target audience preferences (who visits these places)
         
         Format as clear bullet points.""",
-        agent=market_researcher
+        agent=market_researcher,
+        expected_output="Market analysis with positioning, success factors, gaps, and audience insights"
     )
     
     create_strategy = Task(
-        description="""Using the market analysis, create an Instagram strategy plan with:
+        description="""Using the market analysis, create an Instagram strategy plan.
         
-        1. trending_themes: 3-5 key themes that are working in this market
-        2. customer_priorities: 3-5 things customers value most
-        3. common_complaints: 2-4 pain points to address
-        4. content_opportunities: 3-5 specific content ideas
-        5. recommended_hashtags: 5-8 relevant hashtags (with #)
+        Return ONLY a JSON object with these exact keys:
+        {
+          "trending_themes": ["theme1", "theme2", "theme3"],
+          "customer_priorities": ["priority1", "priority2", "priority3"],
+          "common_complaints": ["complaint1", "complaint2"],
+          "content_opportunities": ["opportunity1", "opportunity2", "opportunity3"],
+          "recommended_hashtags": ["#hashtag1", "#hashtag2", "#hashtag3"]
+        }
         
-        Return ONLY as a JSON object with these exact keys.""",
-        agent=social_strategist
+        Make sure it's valid JSON with 3-5 items per array.""",
+        agent=social_strategist,
+        expected_output="JSON object with trending_themes, customer_priorities, common_complaints, content_opportunities, and recommended_hashtags"
     )
     
     # Create and run crew
@@ -218,19 +190,20 @@ Location: {', '.join(comp['location']['display_address'])}
     
     try:
         # Extract JSON from the final result
-        start_idx = result.find('{')
-        end_idx = result.rfind('}') + 1
+        result_str = str(result)
+        start_idx = result_str.find('{')
+        end_idx = result_str.rfind('}') + 1
         if start_idx != -1 and end_idx > start_idx:
-            json_str = result[start_idx:end_idx]
+            json_str = result_str[start_idx:end_idx]
             return json.loads(json_str)
-    except:
-        pass
+    except Exception as e:
+        print(f"Error parsing CrewAI output: {e}")
     
     # Fallback if JSON parsing fails
     return generate_fallback_insights(competitors_data, business_type)
 
 def generate_fallback_insights(competitors_data: List[Dict], business_type: str) -> Dict:
-    """Generate basic insights when LLM fails"""
+    """Generate basic insights when CrewAI fails"""
     avg_rating = sum(c['rating'] for c in competitors_data) / len(competitors_data) if competitors_data else 0
     
     # Extract unique categories
@@ -239,19 +212,9 @@ def generate_fallback_insights(competitors_data: List[Dict], business_type: str)
         all_categories.extend([cat['title'] for cat in comp.get('categories', [])])
     unique_categories = list(set(all_categories))
     
-    # Get price range
-    prices = [c.get('price', '') for c in competitors_data if c.get('price')]
-    if prices:
-        price_range = f"{min(prices, key=len)} - {max(prices, key=len)}"
-    else:
-        price_range = "Competitive pricing"
-
-    # Determine peak times (simplified)
-    peak_times = ["11:30", "13:30", "18:30"]  # Common meal times
-    
     return {
         "trending_themes": [
-            f"Average competitor rating: {avg_rating:.1f}/5.0 - quality is important",
+            f"High ratings ({avg_rating:.1f}/5.0 average) indicate quality focus is key",
             f"Common categories: {', '.join(unique_categories[:3])}"
         ],
         "customer_priorities": [
@@ -275,13 +238,7 @@ def generate_fallback_insights(competitors_data: List[Dict], business_type: str)
             "#local",
             "#instafood",
             "#delicious"
-        ],
-        # Additional fields for content generation alignment
-        "target_audience": f"Local {business_type} enthusiasts seeking quality dining experiences",
-        "engagement_times": peak_times,
-        "content_tone": "authentic and engaging",
-        "market_positioning": f"Competitive {business_type} market with focus on quality and service",
-        "suggested_price_point": price_range
+        ]
     }
 
 # Main function
@@ -290,17 +247,7 @@ def run_competitor_agent(
     location: Optional[str] = None,
     api_key: Optional[str] = None
 ) -> CompetitorInsights:
-    """
-    Run the competitor research agent
-    
-    Args:
-        business_type: Type of business (e.g., "donut shop")
-        location: Business location (e.g., "Los Angeles, CA")
-        api_key: Yelp API key (optional, reads from env if not provided)
-        
-    Returns:
-        CompetitorInsights object with full analysis
-    """
+    """Run the competitor research agent"""
     
     # Default location if not provided
     if not location:
@@ -356,7 +303,7 @@ def run_competitor_agent(
         
         print(f"  • {biz['name']}: {biz['rating']}⭐ ({biz['review_count']} reviews)")
     
-    # Analyze competitors using business data (not reviews)
+    # Analyze competitors
     print(f"\n🤖 Analyzing {len(businesses)} competitors...")
     
     insights = create_competitor_research_crew(businesses, business_type)
@@ -377,7 +324,6 @@ def run_competitor_agent(
 
 # Test execution
 if __name__ == "__main__":
-    # Test with donut shop
     result = run_competitor_agent(
         business_type="donut shop",
         location="Los Angeles, CA"
