@@ -228,7 +228,45 @@ def webhook():
                 "message": "Analysis execution failed"
             }
         
-        # === STAGE 2: Content Generation ===
+        # === STAGE 2: Run Competitor Research Agent ===
+        logger.info(f"[{request_id}] 🔍 Running Competitor Research Agent...")
+        
+        try:
+            from Competitor_Agent import run_competitor_agent
+            
+            competitor_result = run_competitor_agent(
+                business_type=business_type,
+                location=location or "United States"  # Fallback if no location
+            )
+            
+            logger.info(f"[{request_id}] ✓ Competitor research completed!")
+            logger.info(f"   Found {len(competitor_result.competitors)} competitors")
+            
+            # Log some competitor names for verification
+            if competitor_result.competitors:
+                competitor_names = [c.business_name for c in competitor_result.competitors[:3]]
+                logger.info(f"   Top competitors: {', '.join(competitor_names)}")
+            
+            competitor_data = competitor_result.dict()
+            
+        except ImportError as e:
+            logger.error(f"[{request_id}] ✗ Could not import competitor_agent: {e}")
+            competitor_data = {
+                "status": "error",
+                "message": "Competitor agent not available",
+                "competitors": []
+            }
+        except Exception as e:
+            logger.error(f"[{request_id}] ✗ Competitor research failed: {e}")
+            import traceback
+            traceback.print_exc()
+            competitor_data = {
+                "status": "error",
+                "message": str(e),
+                "competitors": []
+            }
+
+        # === STAGE 3: Content Generation ===
         logger.info(f"[{request_id}]  Content Generation - Starting")
         content_data = {
             "status": "pending",
@@ -240,6 +278,7 @@ def webhook():
                 business_type=business_type,
                 campaign_goals=campaign_goals,
                 analysis_data=analysis_data if isinstance(analysis_data, dict) else {},
+                competitor_data=competitor_data if isinstance(competitor_data, dict) else {},
             )
             content_data = content_result.dict()
             logger.info(f"[{request_id}] ✓ Content generated!")
@@ -250,8 +289,7 @@ def webhook():
                 "message": str(e),
             }
 
-        # === STAGE 3-4: Future agents (placeholders) ===
-        logger.info(f"[{request_id}]  Competitor Research - Coming soon")
+        # === STAGE 4: Scheduling (placeholder) ===
         logger.info(f"[{request_id}]  Scheduling - Coming soon")
         
         # Prepare response
@@ -260,10 +298,7 @@ def webhook():
             "status": "success",
             "timestamp": datetime.utcnow().isoformat(),
             "analysis_data": analysis_data,
-            "competitor_data": {
-                "status": "pending",
-                "message": "Competitor Research Agent not yet implemented"
-            },
+            "competitor_data": competitor_data,
             "content_plan": content_data,
             "schedule_data": {
                 "status": "pending",

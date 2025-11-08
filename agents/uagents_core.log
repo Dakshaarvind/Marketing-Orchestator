@@ -44,3 +44,9 @@ requests.exceptions.HTTPError: 401 Client Error: Unauthorized for url: https://a
 2025-10-31 11:04:52,745 uagents_core.utils.registration INFO Registering with Almanac API
 2025-10-31 11:05:03,399 uagents_core.utils.registration WARNING failed to upload agent details. Operation timed out.
 2025-10-31 11:05:47,837 uagents_core.utils.resolver INFO Got response looking up agent endpoint
+2025-11-07 16:23:20,327 uagents_core.utils.registration INFO Registering with Almanac API
+2025-11-07 16:23:31,151 uagents_core.utils.resolver INFO Got response looking up agent endpoint
+2025-11-07 16:24:10,298 uagents_core.utils.resolver INFO Got response looking up agent endpoint
+2025-11-07 16:37:00,485 uagents_core.utils.registration INFO Registering with Almanac API
+2025-11-07 16:37:32,953 uagents_core.utils.resolver INFO Got response looking up agent endpoint
+2025-11-07 16:38:06,705 uagents_core.utils.resolver INFO Got response looking up agent endpoint
