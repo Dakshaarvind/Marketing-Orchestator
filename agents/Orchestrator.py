@@ -40,6 +40,75 @@ CORS(app)
 orchestrator_identity = None
 active_requests = {}
 
+def format_response_for_ui(final_post: dict, analysis_data: dict, content_data: dict, seo_data: dict) -> str:
+    """
+    Format the final Instagram post and all agent outputs into a readable markdown response
+    for Agentverse UI
+    
+    Args:
+        final_post: Consolidated Instagram post
+        analysis_data: Analysis agent output
+        content_data: Content generation output
+        seo_data: SEO optimization output
+        
+    Returns:
+        Formatted markdown string
+    """
+    markdown = "# 🎯 Instagram Post Ready!\n\n"
+    
+    # Main Instagram Post
+    markdown += "## 📸 Your Instagram Post\n\n"
+    markdown += f"**Caption:**\n{final_post.get('caption', 'N/A')}\n\n"
+    hashtags = final_post.get('hashtags', [])
+    if hashtags and isinstance(hashtags, list):
+        markdown += f"**Hashtags:**\n{' '.join(hashtags)}\n\n"
+    else:
+        markdown += "**Hashtags:** N/A\n\n"
+    markdown += f"**Post Type:** {final_post.get('post_type', 'N/A')}\n"
+    markdown += f"**Suggested Post Time:** {final_post.get('suggested_post_time', 'N/A')}\n"
+    markdown += f"**Call to Action:** {final_post.get('call_to_action', 'N/A')}\n\n"
+    
+    # Image URL (if generated)
+    if final_post.get('image_url'):
+        markdown += f"**Generated Image:**\n![Instagram Post]({final_post.get('image_url')})\n\n"
+    
+    # SEO Info
+    if final_post.get('seo_score', 0) > 0:
+        markdown += f"**SEO Score:** {final_post.get('seo_score')}/100 ⭐\n\n"
+    
+    # Media Prompts
+    if final_post.get('media_prompts'):
+        markdown += "## 🎨 Media Ideas\n\n"
+        for i, prompt in enumerate(final_post.get('media_prompts', []), 1):
+            markdown += f"{i}. {prompt}\n"
+        markdown += "\n"
+    
+    # Alt Text
+    if final_post.get('alt_text'):
+        markdown += f"**Alt Text:** {final_post.get('alt_text')}\n\n"
+    
+    # Audience Insights
+    if final_post.get('target_audience'):
+        markdown += "## 👥 Audience Insights\n\n"
+        markdown += f"**Target Audience:** {final_post.get('target_audience')}\n"
+        markdown += f"**Content Tone:** {final_post.get('content_tone')}\n"
+        markdown += f"**Recommended Frequency:** {final_post.get('post_frequency')} posts/week\n"
+        if final_post.get('engagement_times'):
+            markdown += f"**Best Posting Times:** {', '.join(final_post.get('engagement_times', []))}\n"
+        markdown += "\n"
+    
+    # SEO Improvements
+    if final_post.get('seo_improvements'):
+        markdown += "## ✨ SEO Optimizations\n\n"
+        for improvement in final_post.get('seo_improvements', []):
+            markdown += f"- {improvement}\n"
+        markdown += "\n"
+    
+    markdown += "---\n\n"
+    markdown += "✅ *Your Instagram post is ready to use! Copy the caption and hashtags above.*\n"
+    
+    return markdown
+
 def create_final_instagram_post(analysis_data: dict, content_data: dict, seo_data: dict) -> dict:
     """
     Consolidate all agent outputs into a final Instagram-ready post format
@@ -75,9 +144,9 @@ def create_final_instagram_post(analysis_data: dict, content_data: dict, seo_dat
         
         # Media/Image information
         "media_prompts": content_data.get('media_prompts', []),  # Ideas for images/videos
-        "image_prompt": seo_data.get('alt_text_suggestion') if isinstance(seo_data, dict) else None,  # Can be used for image generation
+        "image_prompt": content_data.get('image_prompt') or (seo_data.get('alt_text_suggestion') if isinstance(seo_data, dict) else None),  # Image generation prompt
         "alt_text": seo_data.get('alt_text_suggestion') if isinstance(seo_data, dict) else None,  # For accessibility
-        "image_url": None,  # Placeholder - would be populated if image generation is added
+        "image_url": content_data.get('image_url'),  # Generated image URL if available
         
         # SEO & Optimization
         "keywords": seo_data.get('keyword_suggestions', []) if isinstance(seo_data, dict) else [],
@@ -195,6 +264,7 @@ def webhook():
         
         message = parse_message_from_agent(data)
         sender_address = message.sender
+        original_payload = message.payload  # Keep original for metadata extraction
         payload = message.payload
         
         logger.info(f"From: {sender_address}")
@@ -205,25 +275,34 @@ def webhook():
         if isinstance(payload, dict) and 'content' in payload:
             content = payload.get('content', [])
             if content and len(content) > 0:
-                # Get the text from first content item
-                text_data = content[0].get('text', '{}')
-                raw_user_input = text_data
-                logger.info(f"Raw user input: {text_data}")
+                # Find the text content item (not start-session or metadata)
+                text_data = None
+                for item in content:
+                    if isinstance(item, dict) and item.get('type') == 'text':
+                        text_data = item.get('text', '')
+                        break
                 
-                # Try to parse as JSON first
-                try:
-                    payload = json.loads(text_data)
-                    logger.info(f"Parsed as JSON: {json.dumps(payload, indent=2)}")
-                except json.JSONDecodeError:
-                    # Not JSON - treat as natural language
-                    logger.info("Input is natural language, parsing...")
+                if text_data:
+                    raw_user_input = text_data
+                    logger.info(f"Raw user input: {text_data}")
+                    
+                    # Try to parse as JSON first
                     try:
-                        from nl_parser import parse_user_input
-                        payload = parse_user_input(text_data)
-                        logger.info(f"Parsed from natural language: {json.dumps(payload, indent=2)}")
-                    except Exception as e:
-                        logger.error(f"Failed to parse natural language: {e}")
-                        return jsonify({"error": "Could not understand input"}), 400
+                        payload = json.loads(text_data)
+                        logger.info(f"Parsed as JSON: {json.dumps(payload, indent=2)}")
+                    except json.JSONDecodeError:
+                        # Not JSON - treat as natural language
+                        logger.info("Input is natural language, parsing...")
+                        try:
+                            from nl_parser import parse_user_input
+                            payload = parse_user_input(text_data)
+                            logger.info(f"Parsed from natural language: {json.dumps(payload, indent=2)}")
+                        except Exception as e:
+                            logger.error(f"Failed to parse natural language: {e}")
+                            return jsonify({"error": "Could not understand input"}), 400
+                else:
+                    logger.warning("No text content found in message")
+                    return jsonify({"error": "No text content in message"}), 400
         
         # Extract campaign parameters
         business_type = payload.get('business_type')
@@ -419,25 +498,101 @@ def webhook():
         active_requests[request_id]["status"] = "completed"
         active_requests[request_id]["response"] = response_payload
         
-        # Send response back to sender
+        # Format response for Agentverse UI (markdown text)
+        formatted_response_text = format_response_for_ui(final_post, analysis_data, content_data, seo_data)
+        
+        # Log the formatted response preview
+        logger.info(f"\n[{request_id}] Formatted response preview (first 500 chars):")
+        logger.info(formatted_response_text[:500] + "...")
+        logger.info(f"[{request_id}] Total response length: {len(formatted_response_text)} characters")
+        
+        # Extract msg_id and session_id from incoming message if available
+        incoming_msg_id = None
+        session_id = None
+        if isinstance(original_payload, dict):
+            incoming_msg_id = original_payload.get('msg_id')
+            # Check content array for session metadata
+            if 'content' in original_payload:
+                for item in original_payload.get('content', []):
+                    if isinstance(item, dict) and item.get('type') == 'metadata':
+                        metadata = item.get('metadata', {})
+                        if 'x-session-id' in metadata:
+                            session_id = metadata.get('x-session-id')
+        
+        # Send response back to sender in Agentverse format
         logger.info(f"\n[{request_id}] Sending response back to {sender_address}")
         
         try:
+            # Format response as Agentverse expects: content array with text
+            agentverse_response = {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": formatted_response_text
+                    }
+                ]
+            }
+            
+            # Include msg_id and session_id if available (for correlation)
+            if incoming_msg_id:
+                agentverse_response["msg_id"] = incoming_msg_id
+            if session_id:
+                agentverse_response["session"] = session_id
+            agentverse_response["timestamp"] = datetime.now(UTC).isoformat()
+            
+            logger.info(f"[{request_id}] Sending formatted response to Agentverse UI...")
+            logger.info(f"[{request_id}] Response structure: {json.dumps(agentverse_response, indent=2, ensure_ascii=False)[:500]}...")
+            logger.info(f"[{request_id}] Response text length: {len(formatted_response_text)} chars")
+            logger.info(f"[{request_id}] First 200 chars of text: {formatted_response_text[:200]}")
+            
+            # Send via send_message_to_agent (async messaging)
             send_message_to_agent(
                 orchestrator_identity,
                 sender_address,
-                response_payload
+                agentverse_response
             )
-            logger.info(f"[{request_id}] ✓ Response sent successfully!")
+            logger.info(f"[{request_id}] ✓ Response sent successfully via send_message_to_agent!")
         except Exception as e:
             logger.error(f"[{request_id}] ✗ Failed to send response: {e}")
+            import traceback
+            traceback.print_exc()
             # Still return success to webhook caller even if response send fails
         
         logger.info("=" * 60)
         logger.info("✓ CAMPAIGN REQUEST PROCESSED")
         logger.info("=" * 60 + "\n")
         
-        return jsonify({"status": "success", "request_id": request_id})
+        # Return response in HTTP body - Agentverse expects this format
+        # Match the incoming message structure exactly
+        http_response = {
+            "content": [
+                {
+                    "type": "text",
+                    "text": formatted_response_text
+                }
+            ]
+        }
+        
+        # Include correlation IDs
+        if incoming_msg_id:
+            http_response["msg_id"] = incoming_msg_id
+        if session_id:
+            http_response["session"] = session_id
+        http_response["timestamp"] = datetime.now(UTC).isoformat()
+        
+        logger.info(f"[{request_id}] Returning HTTP response with content...")
+        logger.info(f"[{request_id}] HTTP Response structure: {json.dumps(http_response, indent=2, ensure_ascii=False)[:500]}...")
+        logger.info(f"[{request_id}] Response text length: {len(formatted_response_text)} characters")
+        logger.info(f"[{request_id}] First 300 chars of response: {formatted_response_text[:300]}...")
+        
+        # Set proper headers for Agentverse
+        response = jsonify(http_response)
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, GET, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        
+        return response
         
     except Exception as e:
         logger.error(f"Error in webhook: {e}")
