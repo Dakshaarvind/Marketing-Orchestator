@@ -1,1 +1,8 @@
 .env
+
+# uAgents auto-generated storage files
+*_data.json
+
+# uAgents logs
+uagents_core.log
+agents/uagents_core.log
