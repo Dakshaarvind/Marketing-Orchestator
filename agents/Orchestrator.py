@@ -1,6 +1,6 @@
 """
 Marketing Orchestrator Agent - ASI1 Chat Protocol Compatible
-Uses uAgents framework with ASI1 chat protocol for Agentverse integration
+Updated to display enhanced SEO agent business insights
 """
 import os
 import sys
@@ -45,12 +45,9 @@ if not agent_seed:
     raise ValueError("AGENT_SECRET_KEY_1 not found in .env file")
 
 # Agent configuration
-# For local agents: Use mailbox=True (no ngrok needed, no separate key needed!)
-# For hosted agents: Agentverse handles everything automatically
-
 agent_port = int(os.getenv("AGENT_PORT", "8000"))
-use_mailbox = os.getenv("USE_MAILBOX", "true").lower() == "true"  # Default to True for local agents
-agent_endpoint = os.getenv("AGENT_ENDPOINT_URL")  # Optional: for direct HTTP (ngrok) instead of mailbox
+use_mailbox = os.getenv("USE_MAILBOX", "true").lower() == "true"
+agent_endpoint = os.getenv("AGENT_ENDPOINT_URL")
 
 agent_kwargs = {
     "name": "Marketing Orchestrator",
@@ -58,11 +55,9 @@ agent_kwargs = {
     "port": agent_port,
 }
 
-# Use Mailbox if enabled (no ngrok needed, no separate key needed!)
 if use_mailbox:
-    agent_kwargs["mailbox"] = True  # Just set to True, no key needed!
+    agent_kwargs["mailbox"] = True
     logger.info("Using Mailbox connection (mailbox=True) - no public endpoint needed")
-# Otherwise, use public endpoint if provided (ngrok)
 elif agent_endpoint:
     agent_kwargs["endpoint"] = [f"{agent_endpoint}/submit"]
     logger.info(f"Using public endpoint: {agent_endpoint}")
@@ -74,33 +69,49 @@ agent = Agent(**agent_kwargs)
 logger.info(f"Orchestrator agent address: {agent.address}")
 
 # ============================================================================
-# Helper Functions (Keep all existing business logic)
+# Helper Functions
 # ============================================================================
 
 def format_response_for_ui(final_post: dict, analysis_data: dict, content_data: dict, seo_data: dict) -> str:
     """
     Format the final Instagram post and all agent outputs into a readable markdown response
-    for Agentverse UI
+    for Agentverse UI - NOW WITH BUSINESS INSIGHTS!
     
     Args:
         final_post: Consolidated Instagram post
         analysis_data: Analysis agent output
         content_data: Content generation output
-        seo_data: SEO optimization output
+        seo_data: SEO optimization output (now includes business insights)
         
     Returns:
         Formatted markdown string
     """
-    markdown = "# 🎯 Instagram Post Ready!\n\n"
+    markdown = "# 🎯 Instagram Marketing Campaign Ready!\n\n"
+    
+    # === NEW: BUSINESS STRATEGY INSIGHTS ===
+    if isinstance(seo_data, dict) and seo_data.get('business_strength'):
+        markdown += "## 💡 Strategic Business Insights\n\n"
+        
+        markdown += f"**🎯 Business Strength:**\n{seo_data.get('business_strength', 'N/A')}\n\n"
+        
+        markdown += f"**📝 Content Tone:**\n{seo_data.get('content_tone', 'N/A')}\n\n"
+        
+        markdown += f"**👥 Target Audience:**\n{seo_data.get('target_audience', 'N/A')}\n\n"
+        
+        markdown += f"**🔍 Competitor Insight:**\n{seo_data.get('competitor_takeaway', 'N/A')}\n\n"
+        
+        markdown += "---\n\n"
     
     # Main Instagram Post
     markdown += "## 📸 Your Instagram Post\n\n"
     markdown += f"**Caption:**\n{final_post.get('caption', 'N/A')}\n\n"
+    
     hashtags = final_post.get('hashtags', [])
     if hashtags and isinstance(hashtags, list):
         markdown += f"**Hashtags:**\n{' '.join(hashtags)}\n\n"
     else:
         markdown += "**Hashtags:** N/A\n\n"
+    
     markdown += f"**Post Type:** {final_post.get('post_type', 'N/A')}\n"
     markdown += f"**Suggested Post Time:** {final_post.get('suggested_post_time', 'N/A')}\n"
     markdown += f"**Call to Action:** {final_post.get('call_to_action', 'N/A')}\n\n"
@@ -109,7 +120,7 @@ def format_response_for_ui(final_post: dict, analysis_data: dict, content_data: 
     if final_post.get('image_url'):
         markdown += f"**Generated Image:**\n![Instagram Post]({final_post.get('image_url')})\n\n"
     
-    # SEO Info
+    # SEO Score
     if final_post.get('seo_score', 0) > 0:
         markdown += f"**SEO Score:** {final_post.get('seo_score')}/100 ⭐\n\n"
     
@@ -124,11 +135,9 @@ def format_response_for_ui(final_post: dict, analysis_data: dict, content_data: 
     if final_post.get('alt_text'):
         markdown += f"**Alt Text:** {final_post.get('alt_text')}\n\n"
     
-    # Audience Insights
-    if final_post.get('target_audience'):
-        markdown += "## 👥 Audience Insights\n\n"
-        markdown += f"**Target Audience:** {final_post.get('target_audience')}\n"
-        markdown += f"**Content Tone:** {final_post.get('content_tone')}\n"
+    # Audience Insights (from analysis agent)
+    if final_post.get('post_frequency'):
+        markdown += "## 📊 Posting Strategy\n\n"
         markdown += f"**Recommended Frequency:** {final_post.get('post_frequency')} posts/week\n"
         if final_post.get('engagement_times'):
             markdown += f"**Best Posting Times:** {', '.join(final_post.get('engagement_times', []))}\n"
@@ -136,10 +145,14 @@ def format_response_for_ui(final_post: dict, analysis_data: dict, content_data: 
     
     # SEO Improvements
     if final_post.get('seo_improvements'):
-        markdown += "## ✨ SEO Optimizations\n\n"
+        markdown += "## ✨ SEO Optimizations Made\n\n"
         for improvement in final_post.get('seo_improvements', []):
             markdown += f"- {improvement}\n"
         markdown += "\n"
+    
+    # Keywords
+    if final_post.get('keywords'):
+        markdown += f"**Primary Keywords:** {', '.join(final_post.get('keywords', []))}\n\n"
     
     markdown += "---\n\n"
     markdown += "✅ *Your Instagram post is ready to use! Copy the caption and hashtags above.*\n"
@@ -149,11 +162,12 @@ def format_response_for_ui(final_post: dict, analysis_data: dict, content_data: 
 def create_final_instagram_post(analysis_data: dict, content_data: dict, seo_data: dict) -> dict:
     """
     Consolidate all agent outputs into a final Instagram-ready post format
+    NOW INCLUDES BUSINESS INSIGHTS from enhanced SEO agent
     
     Args:
         analysis_data: Output from Analysis Agent
         content_data: Output from Content Generation Agent
-        seo_data: Output from SEO Agent
+        seo_data: Output from SEO Agent (now with business insights)
         
     Returns:
         Dict with complete Instagram post ready to use
@@ -168,10 +182,16 @@ def create_final_instagram_post(analysis_data: dict, content_data: dict, seo_dat
     
     # Build final post - everything needed for Instagram posting
     final_post = {
+        # === NEW: Business Strategy Insights ===
+        "business_strength": seo_data.get('business_strength', '') if isinstance(seo_data, dict) else '',
+        "content_tone": seo_data.get('content_tone', '') if isinstance(seo_data, dict) else '',
+        "target_audience": seo_data.get('target_audience', '') if isinstance(seo_data, dict) else '',
+        "competitor_takeaway": seo_data.get('competitor_takeaway', '') if isinstance(seo_data, dict) else '',
+        
         # Core Instagram post content
         "caption": final_caption,
         "hashtags": all_hashtags,
-        "hashtag_string": ' '.join(all_hashtags),  # For easy copy-paste
+        "hashtag_string": ' '.join(all_hashtags),
         "post_type": content_data.get('post_type', 'Photo'),
         "call_to_action": content_data.get('call_to_action', ''),
         
@@ -180,19 +200,17 @@ def create_final_instagram_post(analysis_data: dict, content_data: dict, seo_dat
         "engagement_times": analysis_data.get('engagement_times', []) if isinstance(analysis_data, dict) else [],
         
         # Media/Image information
-        "media_prompts": content_data.get('media_prompts', []),  # Ideas for images/videos
-        "image_prompt": content_data.get('image_prompt') or (seo_data.get('alt_text_suggestion') if isinstance(seo_data, dict) else None),  # Image generation prompt
-        "alt_text": seo_data.get('alt_text_suggestion') if isinstance(seo_data, dict) else None,  # For accessibility
-        "image_url": content_data.get('image_url'),  # Generated image URL if available
+        "media_prompts": content_data.get('media_prompts', []),
+        "image_prompt": content_data.get('image_prompt') or (seo_data.get('alt_text_suggestion') if isinstance(seo_data, dict) else None),
+        "alt_text": seo_data.get('alt_text_suggestion') if isinstance(seo_data, dict) else None,
+        "image_url": content_data.get('image_url'),
         
         # SEO & Optimization
         "keywords": seo_data.get('keyword_suggestions', []) if isinstance(seo_data, dict) else [],
         "seo_score": seo_data.get('seo_score', 0) if isinstance(seo_data, dict) else 0,
         "seo_improvements": seo_data.get('improvements', []) if isinstance(seo_data, dict) else [],
         
-        # Audience insights (for reference)
-        "target_audience": analysis_data.get('target_audience', '') if isinstance(analysis_data, dict) else '',
-        "content_tone": analysis_data.get('content_tone', '') if isinstance(analysis_data, dict) else '',
+        # Analysis insights (for reference)
         "post_frequency": analysis_data.get('recommended_post_frequency', 0) if isinstance(analysis_data, dict) else 0,
         
         # Additional notes
@@ -253,13 +271,12 @@ async def process_campaign_request(
         
         competitor_result = run_competitor_agent(
             business_type=business_type,
-            location=location or "United States"  # Fallback if no location
+            location=location or "United States"
         )
         
         logger.info(f"[{request_id}] ✓ Competitor research completed!")
         logger.info(f"   Found {len(competitor_result.competitors)} competitors")
         
-        # Log some competitor names for verification
         if competitor_result.competitors:
             competitor_names = [c.business_name for c in competitor_result.competitors[:3]]
             logger.info(f"   Top competitors: {', '.join(competitor_names)}")
@@ -306,8 +323,8 @@ async def process_campaign_request(
             "message": str(e),
         }
     
-    # === STAGE 4: SEO Optimization ===
-    logger.info(f"[{request_id}] 🚀 SEO Optimization - Starting")
+    # === STAGE 4: SEO Optimization (NOW WITH BUSINESS INSIGHTS!) ===
+    logger.info(f"[{request_id}] 🚀 SEO Optimization with Business Insights - Starting")
     seo_data = {
         "status": "pending",
         "message": "SEO Agent not executed",
@@ -326,6 +343,10 @@ async def process_campaign_request(
             logger.info(f"[{request_id}] ✓ SEO optimization completed!")
             logger.info(f"   SEO Score: {seo_result.seo_score}/100")
             logger.info(f"   Optimized Hashtags: {len(seo_result.optimized_hashtags)} tags")
+            # === NEW: Log business insights ===
+            logger.info(f"   Business Strength: {seo_result.business_strength[:50]}...")
+            logger.info(f"   Content Tone: {seo_result.content_tone}")
+            logger.info(f"   Target Audience: {seo_result.target_audience[:50]}...")
         else:
             logger.warning(f"[{request_id}] ⚠ Skipping SEO - content generation failed or incomplete")
             seo_data = {
@@ -340,6 +361,8 @@ async def process_campaign_request(
         }
     except Exception as e:
         logger.error(f"[{request_id}] ✗ SEO optimization failed: {e}")
+        import traceback
+        traceback.print_exc()
         seo_data = {
             "status": "error",
             "message": str(e),
@@ -451,18 +474,18 @@ async def handle_chat_message(ctx: Context, sender: str, msg: ChatMessage):
             ctx, business_type, location, campaign_goals, request_id
         )
         
-        # Create final Instagram post
-        logger.info(f"[{request_id}] 📦 Consolidating final Instagram post...")
+        # Create final Instagram post (now with business insights!)
+        logger.info(f"[{request_id}] 📦 Consolidating final Instagram post with business insights...")
         final_post = create_final_instagram_post(analysis_data, content_data, seo_data)
         
         logger.info(f"[{request_id}] ✓ Final Instagram post ready!")
         logger.info(f"   Caption: {final_post['caption'][:80]}...")
         logger.info(f"   Hashtags: {len(final_post['hashtags'])} tags")
         logger.info(f"   Post Type: {final_post['post_type']}")
-        logger.info(f"   Post Time: {final_post['suggested_post_time']}")
         logger.info(f"   SEO Score: {final_post['seo_score']}/100")
+        logger.info(f"   Business Strength: {final_post.get('business_strength', 'N/A')[:50]}...")
         
-        # Format response for UI
+        # Format response for UI (now includes business insights!)
         formatted_response_text = format_response_for_ui(final_post, analysis_data, content_data, seo_data)
         
         logger.info(f"[{request_id}] Formatted response length: {len(formatted_response_text)} characters")
