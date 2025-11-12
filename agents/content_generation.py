@@ -6,6 +6,10 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 import json
+import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ContentOutput(BaseModel):
@@ -15,6 +19,8 @@ class ContentOutput(BaseModel):
     call_to_action: str = Field(description="Clear CTA for users")
     suggested_post_time: Optional[str] = Field(default=None, description="Suggested time to post (HH:MM)")
     media_prompts: List[str] = Field(default_factory=list, description="Prompts/ideas for images or short videos")
+    image_prompt: Optional[str] = Field(default=None, description="Detailed prompt for DALL-E image generation")
+    image_url: Optional[str] = Field(default=None, description="URL of generated image from DALL-E")
     notes: Optional[str] = Field(default=None, description="Additional implementation notes for the marketer")
 
 
@@ -79,6 +85,8 @@ class ContentAgentConfig:
         - Provide 10-15 relevant, non-spammy hashtags (no banned hashtags)
           Consider these competitor hashtags: {', '.join(competitor_hashtags) if competitor_hashtags else 'Not available'}
         - Suggest 2-4 media prompts (image or short reel ideas)
+        - Create a detailed image_prompt for DALL-E image generation (describe the visual: colors, composition, mood, key elements)
+          Example: "A beautifully styled latte with latte art next to a plate of fresh chocolate chip cookies on a wooden table, warm natural lighting, cozy cafe atmosphere, Instagram-worthy food photography style"
         - If engagement times are provided, pick one as suggested_post_time
         - Avoid ALL caps and excessive emojis; use at most 1-2 where appropriate
         - Position content uniquely against competitors while staying authentic
@@ -91,6 +99,7 @@ class ContentAgentConfig:
           "call_to_action": "string",
           "suggested_post_time": "HH:MM" | null,
           "media_prompts": ["prompt1", "prompt2"],
+          "image_prompt": "detailed description for DALL-E image generation",
           "notes": "optional string"
         }}
         """
@@ -100,9 +109,48 @@ class ContentAgentConfig:
             agent=agent,
             expected_output=(
                 "A JSON object containing: caption, hashtags[], post_type, call_to_action, "
-                "suggested_post_time, media_prompts[], notes"
+                "suggested_post_time, media_prompts[], image_prompt (detailed description for DALL-E), notes"
             ),
         )
+
+
+def generate_instagram_image(image_prompt: str, business_type: str, api_key: Optional[str] = None) -> Optional[str]:
+    """
+    Generate an Instagram-ready image using DALL-E 3
+    
+    Args:
+        image_prompt: Detailed prompt for image generation
+        business_type: Type of business (for prompt enhancement)
+        api_key: OpenAI API key (optional, uses env var if not provided)
+        
+    Returns:
+        URL of the generated image, or None if generation fails
+    """
+    try:
+        from openai import OpenAI
+        
+        client = OpenAI(api_key=api_key or os.getenv("OPENAI_API_KEY"))
+        
+        # Enhance prompt for Instagram-style images
+        enhanced_prompt = f"{image_prompt}, professional food photography, Instagram-worthy, high quality, vibrant colors, appealing composition"
+        
+        logger.info(f"Generating image with DALL-E: {enhanced_prompt[:100]}...")
+        
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=enhanced_prompt,
+            size="1024x1024",  # Square format for Instagram
+            quality="standard",
+            n=1,
+        )
+        
+        image_url = response.data[0].url
+        logger.info(f"✓ Image generated successfully: {image_url}")
+        return image_url
+        
+    except Exception as e:
+        logger.error(f"Failed to generate image: {e}")
+        return None
 
 
 def parse_content_output(raw_output: str) -> ContentOutput:
@@ -120,6 +168,8 @@ def parse_content_output(raw_output: str) -> ContentOutput:
         call_to_action="Visit us today and mention this post.",
         suggested_post_time=None,
         media_prompts=["Close-up of product", "Customer enjoying the item"],
+        image_prompt=None,
+        image_url=None,
         notes="Fallback content used due to parsing issue.",
     )
 
@@ -161,7 +211,36 @@ def run_content_agent(
 
     crew = Crew(agents=[agent], tasks=[task], verbose=True)
     result = crew.kickoff()
-    return parse_content_output(str(result))
+    content_output = parse_content_output(str(result))
+    
+    # Generate image if image_prompt is available
+    if content_output.image_prompt:
+        logger.info("Generating Instagram image with DALL-E...")
+        image_url = generate_instagram_image(
+            image_prompt=content_output.image_prompt,
+            business_type=business_type,
+            api_key=api_key
+        )
+        if image_url:
+            content_output.image_url = image_url
+            logger.info("✓ Image generated and added to content output")
+        else:
+            logger.warning("⚠ Image generation failed, continuing without image")
+    else:
+        # Fallback: try to generate from first media_prompt if available
+        if content_output.media_prompts and len(content_output.media_prompts) > 0:
+            logger.info("No image_prompt provided, generating from first media_prompt...")
+            image_url = generate_instagram_image(
+                image_prompt=content_output.media_prompts[0],
+                business_type=business_type,
+                api_key=api_key
+            )
+            if image_url:
+                content_output.image_url = image_url
+                content_output.image_prompt = content_output.media_prompts[0]
+                logger.info("✓ Image generated from media_prompt")
+    
+    return content_output
 
 
 if __name__ == "__main__":

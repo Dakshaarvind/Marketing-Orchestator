@@ -118,7 +118,11 @@ def format_response_for_ui(final_post: dict, analysis_data: dict, content_data: 
     
     # Image URL (if generated)
     if final_post.get('image_url'):
-        markdown += f"**Generated Image:**\n![Instagram Post]({final_post.get('image_url')})\n\n"
+        markdown += "## 🖼️ Generated Image\n\n"
+        markdown += f"![Instagram Post]({final_post.get('image_url')})\n\n"
+        markdown += f"**Image URL:** {final_post.get('image_url')}\n\n"
+        if final_post.get('image_prompt'):
+            markdown += f"*Generated from: {final_post.get('image_prompt')[:100]}...*\n\n"
     
     # SEO Score
     if final_post.get('seo_score', 0) > 0:
