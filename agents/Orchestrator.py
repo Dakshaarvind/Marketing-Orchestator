@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import logging
+import time
 from pathlib import Path
 from uuid import uuid4
 from datetime import datetime, timezone
@@ -72,7 +73,7 @@ logger.info(f"Orchestrator agent address: {agent.address}")
 # Helper Functions
 # ============================================================================
 
-def format_response_for_ui(final_post: dict, analysis_data: dict, content_data: dict, seo_data: dict) -> str:
+def format_response_for_ui(final_post: dict, analysis_data: dict, content_data: dict, seo_data: dict, processing_time: float = None, competitor_count: int = 0) -> str:
     """
     Format the final Instagram post and all agent outputs into a readable markdown response
     for Agentverse UI - NOW WITH BUSINESS INSIGHTS!
@@ -87,79 +88,129 @@ def format_response_for_ui(final_post: dict, analysis_data: dict, content_data: 
         Formatted markdown string
     """
     markdown = "# 🎯 Instagram Marketing Campaign Ready!\n\n"
+    markdown += "*Complete, AI-optimized content ready for immediate posting*\n\n"
     
-    # === NEW: BUSINESS STRATEGY INSIGHTS ===
+    # === QUICK METRICS SUMMARY ===
+    markdown += "## 📊 Campaign Summary\n\n"
+    if final_post.get('seo_score', 0) > 0:
+        markdown += f"✓ **SEO Score:** {final_post.get('seo_score')}/100 ⭐\n"
+    if final_post.get('hashtags'):
+        markdown += f"✓ **Hashtags:** {len(final_post.get('hashtags', []))} optimized\n"
+    if competitor_count > 0:
+        markdown += f"✓ **Competitors:** {competitor_count} analyzed\n"
+    if processing_time:
+        markdown += f"✓ **Generated in:** {processing_time:.1f} seconds\n"
+    markdown += "\n---\n\n"
+    
+    # === STRATEGIC BUSINESS INSIGHTS ===
     if isinstance(seo_data, dict) and seo_data.get('business_strength'):
         markdown += "## 💡 Strategic Business Insights\n\n"
         
-        markdown += f"**🎯 Business Strength:**\n{seo_data.get('business_strength', 'N/A')}\n\n"
+        markdown += f"**🎯 Business Strength**\n"
+        markdown += f"{seo_data.get('business_strength', 'N/A')}\n\n"
         
-        markdown += f"**📝 Content Tone:**\n{seo_data.get('content_tone', 'N/A')}\n\n"
+        markdown += f"**📝 Recommended Content Tone**\n"
+        markdown += f"{seo_data.get('content_tone', 'N/A')}\n\n"
         
-        markdown += f"**👥 Target Audience:**\n{seo_data.get('target_audience', 'N/A')}\n\n"
+        markdown += f"**👥 Target Audience**\n"
+        markdown += f"{seo_data.get('target_audience', 'N/A')}\n\n"
         
-        markdown += f"**🔍 Competitor Insight:**\n{seo_data.get('competitor_takeaway', 'N/A')}\n\n"
+        markdown += f"**🔍 Competitive Advantage**\n"
+        markdown += f"{seo_data.get('competitor_takeaway', 'N/A')}\n\n"
         
         markdown += "---\n\n"
     
-    # Main Instagram Post
+    # === MAIN INSTAGRAM POST ===
     markdown += "## 📸 Your Instagram Post\n\n"
-    markdown += f"**Caption:**\n{final_post.get('caption', 'N/A')}\n\n"
     
+    # Caption (formatted nicely)
+    caption = final_post.get('caption', 'N/A')
+    markdown += f"**✨ Caption:**\n\n"
+    markdown += f"{caption}\n\n"
+    
+    # Hashtags (formatted in a readable way - max 5 per line)
     hashtags = final_post.get('hashtags', [])
     if hashtags and isinstance(hashtags, list):
-        markdown += f"**Hashtags:**\n{' '.join(hashtags)}\n\n"
+        markdown += f"**#️⃣ Hashtags:**\n"
+        hashtag_lines = []
+        for i in range(0, len(hashtags), 5):
+            hashtag_lines.append(' '.join(hashtags[i:i+5]))
+        markdown += '\n'.join(hashtag_lines) + "\n\n"
     else:
-        markdown += "**Hashtags:** N/A\n\n"
+        markdown += "**#️⃣ Hashtags:** N/A\n\n"
     
-    markdown += f"**Post Type:** {final_post.get('post_type', 'N/A')}\n"
-    markdown += f"**Suggested Post Time:** {final_post.get('suggested_post_time', 'N/A')}\n"
-    markdown += f"**Call to Action:** {final_post.get('call_to_action', 'N/A')}\n\n"
+    # Post metadata in a clean format
+    markdown += "**📋 Post Details:**\n"
+    markdown += f"- **Type:** {final_post.get('post_type', 'N/A')}\n"
+    if final_post.get('suggested_post_time'):
+        markdown += f"- **Optimal Post Time:** {final_post.get('suggested_post_time')}\n"
+    if final_post.get('call_to_action'):
+        markdown += f"- **Call to Action:** {final_post.get('call_to_action')}\n"
+    markdown += "\n"
     
-    # Image URL (if generated)
+    # Generated Image (if available)
     if final_post.get('image_url'):
-        markdown += "## 🖼️ Generated Image\n\n"
+        markdown += "---\n\n"
+        markdown += "## 🖼️ Generated Visual Content\n\n"
         markdown += f"![Instagram Post]({final_post.get('image_url')})\n\n"
-        markdown += f"**Image URL:** {final_post.get('image_url')}\n\n"
-        if final_post.get('image_prompt'):
-            markdown += f"*Generated from: {final_post.get('image_prompt')[:100]}...*\n\n"
+        markdown += f"*AI-generated image optimized for Instagram engagement*\n\n"
+        if final_post.get('alt_text'):
+            markdown += f"**Alt Text (for accessibility):**\n{final_post.get('alt_text')}\n\n"
+        markdown += "---\n\n"
     
-    # SEO Score
+    # === PERFORMANCE METRICS ===
     if final_post.get('seo_score', 0) > 0:
-        markdown += f"**SEO Score:** {final_post.get('seo_score')}/100 ⭐\n\n"
+        markdown += "## 📊 Performance Metrics\n\n"
+        markdown += f"**SEO Score:** **{final_post.get('seo_score')}/100** ⭐\n\n"
+        
+        if final_post.get('keywords'):
+            markdown += f"**Primary Keywords:**\n"
+            keywords_str = ' • '.join(final_post.get('keywords', []))
+            markdown += f"{keywords_str}\n\n"
+        
+        if final_post.get('seo_improvements'):
+            markdown += "**Optimizations Applied:**\n"
+            for improvement in final_post.get('seo_improvements', []):
+                markdown += f"✓ {improvement}\n"
+            markdown += "\n"
+        
+        markdown += "---\n\n"
     
-    # Media Prompts
+    # === CONTENT STRATEGY ===
+    markdown += "## 📈 Content Strategy Recommendations\n\n"
+    
+    if final_post.get('post_frequency'):
+        markdown += f"**Recommended Posting Frequency:** {final_post.get('post_frequency')} posts per week\n\n"
+    
+    if final_post.get('engagement_times'):
+        markdown += "**Optimal Posting Times:**\n"
+        times = final_post.get('engagement_times', [])
+        times_str = ' • '.join(times)
+        markdown += f"{times_str}\n\n"
+    
     if final_post.get('media_prompts'):
-        markdown += "## 🎨 Media Ideas\n\n"
+        markdown += "**Additional Content Ideas:**\n"
         for i, prompt in enumerate(final_post.get('media_prompts', []), 1):
             markdown += f"{i}. {prompt}\n"
         markdown += "\n"
     
-    # Alt Text
-    if final_post.get('alt_text'):
-        markdown += f"**Alt Text:** {final_post.get('alt_text')}\n\n"
+    markdown += "---\n\n"
     
-    # Audience Insights (from analysis agent)
-    if final_post.get('post_frequency'):
-        markdown += "## 📊 Posting Strategy\n\n"
-        markdown += f"**Recommended Frequency:** {final_post.get('post_frequency')} posts/week\n"
-        if final_post.get('engagement_times'):
-            markdown += f"**Best Posting Times:** {', '.join(final_post.get('engagement_times', []))}\n"
-        markdown += "\n"
-    
-    # SEO Improvements
-    if final_post.get('seo_improvements'):
-        markdown += "## ✨ SEO Optimizations Made\n\n"
-        for improvement in final_post.get('seo_improvements', []):
-            markdown += f"- {improvement}\n"
-        markdown += "\n"
-    
-    # Keywords
-    if final_post.get('keywords'):
-        markdown += f"**Primary Keywords:** {', '.join(final_post.get('keywords', []))}\n\n"
+    # === COPY-READY FORMAT ===
+    markdown += "## 📋 Copy-Ready Format\n\n"
+    markdown += "*Copy the text below directly into Instagram:*\n\n"
+    markdown += "```\n"
+    markdown += f"{final_post.get('caption', 'N/A')}\n\n"
+    if final_post.get('hashtags'):
+        markdown += ' '.join(final_post.get('hashtags', [])) + "\n"
+    markdown += "```\n\n"
     
     markdown += "---\n\n"
-    markdown += "✅ *Your Instagram post is ready to use! Copy the caption and hashtags above.*\n"
+    
+    # === FINAL CALL TO ACTION ===
+    markdown += "## ✅ Ready to Post\n\n"
+    markdown += "Your Instagram post is complete and optimized. Simply copy the caption and hashtags above, upload your image, and post at the suggested time for maximum engagement.\n\n"
+    markdown += "*Generated by Marketing Orchestrator AI*\n"
     
     return markdown
 
@@ -473,10 +524,21 @@ async def handle_chat_message(ctx: Context, sender: str, msg: ChatMessage):
             await ctx.send(sender, error_response)
             return
         
+        # Track processing time
+        start_time = time.time()
+        
         # Process campaign through all agents
         analysis_data, competitor_data, content_data, seo_data = await process_campaign_request(
             ctx, business_type, location, campaign_goals, request_id
         )
+        
+        # Calculate processing time
+        processing_time = time.time() - start_time
+        
+        # Count competitors
+        competitor_count = 0
+        if isinstance(competitor_data, dict) and competitor_data.get('competitors'):
+            competitor_count = len(competitor_data.get('competitors', []))
         
         # Create final Instagram post (now with business insights!)
         logger.info(f"[{request_id}] 📦 Consolidating final Instagram post with business insights...")
@@ -487,10 +549,16 @@ async def handle_chat_message(ctx: Context, sender: str, msg: ChatMessage):
         logger.info(f"   Hashtags: {len(final_post['hashtags'])} tags")
         logger.info(f"   Post Type: {final_post['post_type']}")
         logger.info(f"   SEO Score: {final_post['seo_score']}/100")
+        logger.info(f"   Competitors Analyzed: {competitor_count}")
+        logger.info(f"   Processing Time: {processing_time:.1f} seconds")
         logger.info(f"   Business Strength: {final_post.get('business_strength', 'N/A')[:50]}...")
         
-        # Format response for UI (now includes business insights!)
-        formatted_response_text = format_response_for_ui(final_post, analysis_data, content_data, seo_data)
+        # Format response for UI (now includes business insights, metrics, and copy-ready format!)
+        formatted_response_text = format_response_for_ui(
+            final_post, analysis_data, content_data, seo_data, 
+            processing_time=processing_time, 
+            competitor_count=competitor_count
+        )
         
         logger.info(f"[{request_id}] Formatted response length: {len(formatted_response_text)} characters")
         
