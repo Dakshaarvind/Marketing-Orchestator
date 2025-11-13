@@ -542,7 +542,8 @@ The system automatically generates Instagram-ready images using DALL-E 3:
 
 ## 👥 Contributors
 
-- Chayan - Main Developer
+- Chayan 
+- Daksha 
 
 ## 📈 Performance Metrics
 
