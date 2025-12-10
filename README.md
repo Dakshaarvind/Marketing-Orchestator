@@ -536,14 +536,10 @@ The system automatically generates Instagram-ready images using DALL-E 3:
 - [ ] **Batch Processing**: Generate multiple posts at once
 - [ ] **Custom Image Styles**: Business-specific image generation styles
 
-## 📝 License
-
-[Add your license here]
-
 ## 👥 Contributors
 
-- Chayan 
-- Daksha 
+- Chayan Shah
+- Daksha Arvind
 
 ## 📈 Performance Metrics
 
